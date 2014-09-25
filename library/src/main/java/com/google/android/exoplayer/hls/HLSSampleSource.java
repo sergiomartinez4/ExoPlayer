@@ -57,7 +57,7 @@ public class HLSSampleSource implements SampleSource {
   private MainPlaylist.Entry currentEntry;
 
   private ArrayList<LinkedList<Object>> list;
-  int track2type[] = new int[2];
+  int track2type[] = new int[3];
 
   private int maxBufferSize;
   private int bufferSize;
@@ -73,13 +73,14 @@ public class HLSSampleSource implements SampleSource {
   /* Amount we need to substract to get timestamps starting at 0 */
   private long ptsOffset;
   /* used to keep track of wrapping from the thread */
-  private WrapInfo wrapInfo[] = new WrapInfo[2];
+  private WrapInfo wrapInfo[] = new WrapInfo[3];
 
   private boolean endOfStream;
   private Handler eventHandler;
   private EventListener eventListener;
   private int videoStreamType;
   private int audioStreamType;
+  private int metaDataStreamType;
   private boolean gotStreamTypes;
   private int maxBps;
   private int firstRememberedMediaSequence;
@@ -155,8 +156,10 @@ public class HLSSampleSource implements SampleSource {
     list = new ArrayList<LinkedList<Object>>();
     list.add(new LinkedList<Object>());
     list.add(new LinkedList<Object>());
+    list.add(new LinkedList<Object>());
     wrapInfo[Packet.TYPE_AUDIO] = new WrapInfo();
     wrapInfo[Packet.TYPE_VIDEO] = new WrapInfo();
+    wrapInfo[Packet.TYPE_METADATA] = new WrapInfo();
     userAgent = "HLS Player";
     bufferedPts = new AtomicLong();
     this.eventHandler = eventHandler;
@@ -452,7 +455,7 @@ public class HLSSampleSource implements SampleSource {
         return false;
       } else {
         kickVariantPlaylistTask();
-        return true;
+        return false;
       }
     } else if (sequence < variantPlaylist.mediaSequence) {
       int newSequence = variantPlaylist.mediaSequence + 1;
@@ -745,6 +748,7 @@ public class HLSSampleSource implements SampleSource {
           if (!gotStreamTypes) {
               audioStreamType = extractor.getStreamType(Packet.TYPE_AUDIO);
               videoStreamType = extractor.getStreamType(Packet.TYPE_VIDEO);
+              metaDataStreamType = extractor.getStreamType(Packet.TYPE_METADATA);
               gotStreamTypes = true;
             }
 

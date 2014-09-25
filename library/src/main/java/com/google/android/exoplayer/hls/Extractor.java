@@ -2,9 +2,6 @@ package com.google.android.exoplayer.hls;
 
 import com.google.android.exoplayer.ParserException;
 
-import java.util.ArrayList;
-import java.util.LinkedList;
-
 public abstract class Extractor {
 
   public static final int STREAM_TYPE_NONE = -1;
@@ -12,6 +9,7 @@ public abstract class Extractor {
   public static final int STREAM_TYPE_H264 = 0x1b;
   public static final int STREAM_TYPE_MPEG_AUDIO = 0x3;
   public static final int STREAM_TYPE_MPEG_AUDIO2 = 0x4;
+  public static final int STREAM_TYPE_METADATA_PES = 0x15;
 
   /*
    * return null if end of stream

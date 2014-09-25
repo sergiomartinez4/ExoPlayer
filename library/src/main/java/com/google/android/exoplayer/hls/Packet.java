@@ -1,8 +1,6 @@
 package com.google.android.exoplayer.hls;
 
 import java.nio.ByteBuffer;
-import java.util.ArrayList;
-import java.util.LinkedList;
 
 /**
 * Created by martin on 18/08/14.
@@ -10,6 +8,7 @@ import java.util.LinkedList;
 public abstract class Packet {
   public static final int TYPE_VIDEO = 0;
   public static final int TYPE_AUDIO = 1;
+  public static final int TYPE_METADATA = 2;
 
   public long pts;
   public ByteBuffer data;

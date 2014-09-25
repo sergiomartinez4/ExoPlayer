@@ -13,7 +13,7 @@ import java.util.HashMap;
  * Created by martin on 18/08/14.
  */
 public class TSExtractorWithParsers extends Extractor {
-  private final Parser[] parser = new Parser[2];
+  private final Parser[] parser = new Parser[3];
   private TSExtractor extractor;
   private Parser currentParser;
 

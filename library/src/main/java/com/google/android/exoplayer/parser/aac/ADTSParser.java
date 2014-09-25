@@ -1,7 +1,5 @@
 package com.google.android.exoplayer.parser.aac;
 
-import android.util.Log;
-
 import com.google.android.exoplayer.hls.DefaultPacketAllocator;
 import com.google.android.exoplayer.hls.Packet;
 import com.google.android.exoplayer.hls.Parser;

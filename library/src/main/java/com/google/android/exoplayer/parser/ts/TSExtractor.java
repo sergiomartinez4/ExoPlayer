@@ -4,7 +4,6 @@ import android.util.Log;
 import android.util.SparseArray;
 
 import com.google.android.exoplayer.ParserException;
-import com.google.android.exoplayer.hls.DefaultPacketAllocator;
 import com.google.android.exoplayer.hls.Extractor;
 import com.google.android.exoplayer.hls.Packet;
 import com.google.android.exoplayer.hls.TSPacketAllocator;
@@ -31,6 +30,7 @@ public class TSExtractor extends Extractor {
   private boolean endOfStream;
   private int audioStreamType;
   private int videoStreamType;
+  private int metaDataStreamType;
   private boolean unitStartNotSignalled;
 
   private int dataSize;
@@ -58,7 +58,7 @@ public class TSExtractor extends Extractor {
     abstract public void handlePayload(Packet.UnsignedByteArray packet, int payloadStart, boolean unit_start);
   }
 
-  class PESHandler extends PayloadHandler {
+   class PESHandler extends PayloadHandler {
     private Packet currentSample;
     private int length;
     private int type;
@@ -69,6 +69,7 @@ public class TSExtractor extends Extractor {
       this.type = type;
       allocator = allocators[type];
     }
+    private boolean id3Tag;
 
     @Override
     public void handlePayload(Packet.UnsignedByteArray packet, int payloadStart, boolean unitStart) {
@@ -96,6 +97,7 @@ public class TSExtractor extends Extractor {
         }
 
         currentSample = allocator.allocatePacket(type);
+        id3Tag = false;
 
         int[] prefix = new int[3];
         prefix[0] = packet.get(offset++);
@@ -105,12 +107,22 @@ public class TSExtractor extends Extractor {
           Log.d(TAG, String.format("bad start code: 0x%02x%02x%02x", prefix[0], prefix[1], prefix[2]));
         }
         // skip stream id
+        int streamId = packet.get(offset);
+          if ( (streamId & 0xBD) == 0xBD) {
+              Log.v(TAG, "DERP: Private Stream");
+          }
+
         offset++;
         length = packet.getShort(offset);
         offset += 2;
 
-        // skip some stuff
+        // obtain data aligment indicator bit for ID3 tag information
+        int extensionPES = packet.get(offset);
+        if ((extensionPES & 0x84) == 0x84) {
+            id3Tag = true;
+        }
         offset++;
+
         int flags = packet.get(offset++);
         int headerDataLength = packet.get(offset++);
         int fixedOffset = offset;
@@ -121,7 +133,6 @@ public class TSExtractor extends Extractor {
           pts |= (packet.get(offset++) & 0xfe) << 13;
           pts |= (packet.get(offset++)) << 6;
           pts |= (packet.get(offset++) & 0xfe) >> 2;
-
         }
         if ((flags & 0x40) == 0x40) {
           // DTS
@@ -131,6 +142,40 @@ public class TSExtractor extends Extractor {
         currentSample.pts = pts;
 
         offset = fixedOffset + headerDataLength;
+
+        if (id3Tag && (length > 0) && ((flags & 0x80) == 0x80) && (streamId == 13)) {
+            //Log.v(TAG, "DERP: " + extensionPES + ", " + length + ", " + flags + ", " + streamId);
+            String id3Tag = new String(packet.array(), offset, 3);
+            //Log.v(TAG, "DERP ID3: " + id3Tag);
+
+            int versionOffset = offset + 3;
+            int version1 = packet.get(versionOffset);
+            versionOffset++;
+            int version2 = packet.get(versionOffset);
+            //Log.v(TAG, "DERP ID3: version: " + version1 + " " + version2);
+            versionOffset++;
+            int id3Flags = packet.get(versionOffset);
+            boolean extendedHeader = (id3Flags & 0x40) !=0;
+            boolean footerPresent =  (id3Flags & 0x10) !=0;
+            //Log.v(TAG, "DERP ID3: flags: " + id3Flags);
+            versionOffset++;
+            int size = getSynchSafeInteger(packet, versionOffset);
+            Log.v(TAG, "DERP ID3: size: " + size);
+            if (size == 0 || size > packet.length()) {
+                Log.v(TAG, "DERP bad ID3 tag size");
+            }
+            versionOffset+=4;
+
+            String tag = new String(packet.array(), versionOffset, 4);
+            Log.v(TAG, "DERP ID3: id: " + tag); // TXXX - User defined text info frame
+            versionOffset += 4;
+            int tagSize = getSynchSafeInteger(packet, versionOffset);
+            Log.v(TAG, "DERP ID3: tagSize: " + tagSize);
+            versionOffset += 6; // 4 for the size, skipped the 2 for the flags
+            String dataz = new String(packet.array(), versionOffset, tagSize);
+            Log.v(TAG, "DERP ID3: data: " + dataz);
+        }
+
         if (length > 0)
           length -= headerDataLength + 3;
 
@@ -155,6 +200,10 @@ public class TSExtractor extends Extractor {
       }
     }
   }
+
+    private static int getSynchSafeInteger(Packet.UnsignedByteArray data, int offset) {
+        return (data.get(offset) << 21) | (data.get(offset + 1) << 14) | (data.get(offset + 2) << 7) | (data.get(offset + 3));
+    }
 
   abstract class SectionHandler extends PayloadHandler {
     protected int tableID;
@@ -228,9 +277,9 @@ public class TSExtractor extends Extractor {
         i += ES_info_length;
         streams.add(stream);
       }
-
       PESHandler audio_handler = null;
       PESHandler video_handler = null;
+      PESHandler metadata_handler = null;
       PESHandler handler;
       for (Stream s: streams) {
         handler = null;
@@ -251,6 +300,10 @@ public class TSExtractor extends Extractor {
           video_handler = new PESHandler(s.pid, Packet.TYPE_VIDEO);
           handler = video_handler;
           //Log.d(TAG, String.format("video found on pid %04x", s.pid));
+        } else if (metadata_handler == null && s.type == STREAM_TYPE_METADATA_PES) {
+            metaDataStreamType = s.type;
+            metadata_handler = new PESHandler(s.pid, Packet.TYPE_METADATA);
+            handler = metadata_handler;
         }
         if (handler != null) {
           activePayloadHandlers.put(s.pid, handler);
@@ -313,9 +366,10 @@ public class TSExtractor extends Extractor {
 
     TSPacketAllocator[] allocators = (TSPacketAllocator[])allocatorsMap.get(getClass());
     if (allocators == null) {
-      allocators = new TSPacketAllocator[2];
+      allocators = new TSPacketAllocator[3];
       allocators[Packet.TYPE_AUDIO] = new TSPacketAllocator(100*1024);
       allocators[Packet.TYPE_VIDEO] = new TSPacketAllocator(500*1024);
+      allocators[Packet.TYPE_METADATA] = new TSPacketAllocator(100*1024);
       // remember them for later
       allocatorsMap.put(getClass(), allocators);
     }
@@ -323,6 +377,7 @@ public class TSExtractor extends Extractor {
 
     audioStreamType = STREAM_TYPE_NONE;
     videoStreamType = STREAM_TYPE_NONE;
+    metaDataStreamType = STREAM_TYPE_NONE;
     while(!hasPMT) {
       readOnePacket();
     }
@@ -421,6 +476,7 @@ public class TSExtractor extends Extractor {
     }
 
     payloadHandler.handlePayload(packet, payload_offset, unit_start);
+
     packetWriteOffset = 0;
   }
 
