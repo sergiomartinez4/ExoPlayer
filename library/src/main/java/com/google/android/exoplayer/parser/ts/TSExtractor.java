@@ -69,7 +69,6 @@ public class TSExtractor extends Extractor {
       this.type = type;
       allocator = allocators[type];
     }
-    private boolean id3Tag;
 
     @Override
     public void handlePayload(Packet.UnsignedByteArray packet, int payloadStart, boolean unitStart) {
@@ -97,7 +96,6 @@ public class TSExtractor extends Extractor {
         }
 
         currentSample = allocator.allocatePacket(type);
-        id3Tag = false;
 
         int[] prefix = new int[3];
         prefix[0] = packet.get(offset++);
@@ -106,21 +104,18 @@ public class TSExtractor extends Extractor {
         if (prefix[0] != 0 || prefix[1] != 0 || prefix[2] != 1 ) {
           Log.d(TAG, String.format("bad start code: 0x%02x%02x%02x", prefix[0], prefix[1], prefix[2]));
         }
-        // skip stream id
+
+        // Use the stream ID to detect metadata PES packets
         int streamId = packet.get(offset);
-          if ( (streamId & 0xBD) == 0xBD) {
-              Log.v(TAG, "DERP: Private Stream");
-          }
+          // stream id 0xBD - Private Stream is supposed to be used for
+          // metadata, but doesn't seem to be here.
 
         offset++;
         length = packet.getShort(offset);
         offset += 2;
 
         // obtain data aligment indicator bit for ID3 tag information
-        int extensionPES = packet.get(offset);
-        if ((extensionPES & 0x84) == 0x84) {
-            id3Tag = true;
-        }
+        int dataAlignmentIndicator = packet.get(offset);
         offset++;
 
         int flags = packet.get(offset++);
@@ -143,37 +138,49 @@ public class TSExtractor extends Extractor {
 
         offset = fixedOffset + headerDataLength;
 
-        if (id3Tag && (length > 0) && ((flags & 0x80) == 0x80) && (streamId == 13)) {
-            //Log.v(TAG, "DERP: " + extensionPES + ", " + length + ", " + flags + ", " + streamId);
+        // Requires for a valid ID3 tag inside of a PES packet:
+        // The data alignment indicator bit is set to 1.
+        // The packet length is greater than 0.
+        // The PTS_DTS bits are set to '10'.
+        // The stream ID is for a private stream (this doesnt appear to be correct).
+        if (((dataAlignmentIndicator & 0x84) == 0x84) && (length > 0) && ((flags & 0x80) == 0x80) && (streamId == 13)) {
             String id3Tag = new String(packet.array(), offset, 3);
-            //Log.v(TAG, "DERP ID3: " + id3Tag);
 
-            int versionOffset = offset + 3;
-            int version1 = packet.get(versionOffset);
-            versionOffset++;
-            int version2 = packet.get(versionOffset);
-            //Log.v(TAG, "DERP ID3: version: " + version1 + " " + version2);
-            versionOffset++;
-            int id3Flags = packet.get(versionOffset);
-            boolean extendedHeader = (id3Flags & 0x40) !=0;
-            boolean footerPresent =  (id3Flags & 0x10) !=0;
-            //Log.v(TAG, "DERP ID3: flags: " + id3Flags);
-            versionOffset++;
-            int size = getSynchSafeInteger(packet, versionOffset);
-            Log.v(TAG, "DERP ID3: size: " + size);
-            if (size == 0 || size > packet.length()) {
-                Log.v(TAG, "DERP bad ID3 tag size");
+            if (!id3Tag.equals("ID3")) {
+                Log.e(TAG, "Error - not an ID3 tag. Header did not start with 'ID3'");
             }
-            versionOffset+=4;
 
-            String tag = new String(packet.array(), versionOffset, 4);
-            Log.v(TAG, "DERP ID3: id: " + tag); // TXXX - User defined text info frame
-            versionOffset += 4;
-            int tagSize = getSynchSafeInteger(packet, versionOffset);
-            Log.v(TAG, "DERP ID3: tagSize: " + tagSize);
-            versionOffset += 6; // 4 for the size, skipped the 2 for the flags
-            String dataz = new String(packet.array(), versionOffset, tagSize);
-            Log.v(TAG, "DERP ID3: data: " + dataz);
+            int id3TagOffset = offset + 5;
+            int id3Flags = packet.get(id3TagOffset);
+            boolean id3ExtendedHeader = (id3Flags & 0x40) !=0;
+
+            id3TagOffset++;
+
+            int size = getSynchSafeInteger(packet, id3TagOffset);
+            if (size == 0 || size > packet.length()) {
+                Log.e(TAG, "Error - ID3 tag size is incorrect.");
+            }
+
+            id3TagOffset+=4;
+
+            if (id3ExtendedHeader) {
+                id3TagOffset += 10;
+            }
+
+            int sizeOffset = id3TagOffset + size;
+            while (id3TagOffset < sizeOffset) {
+                String tag = new String(packet.array(), id3TagOffset, 4);
+                // send the tag somewhere?
+                id3TagOffset += 4;
+                int tagSize = getSynchSafeInteger(packet, id3TagOffset);
+                id3TagOffset += 6; // 4 for the size, skipped the 2 for the flags
+
+                String id3Data = new String(packet.array(), id3TagOffset, tagSize);
+                long timeStamp = pts/45;
+                // move the ID3 data and timestamp somewhere..
+
+                id3TagOffset += tagSize;
+            }
         }
 
         if (length > 0)
