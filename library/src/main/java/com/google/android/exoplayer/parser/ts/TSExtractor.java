@@ -97,6 +97,7 @@ public class TSExtractor extends Extractor {
 
         currentSample = allocator.allocatePacket(type);
 
+        // detect PES packet preamble
         int[] prefix = new int[3];
         prefix[0] = packet.get(offset++);
         prefix[1] = packet.get(offset++);
@@ -105,10 +106,8 @@ public class TSExtractor extends Extractor {
           Log.d(TAG, String.format("bad start code: 0x%02x%02x%02x", prefix[0], prefix[1], prefix[2]));
         }
 
-        // Use the stream ID to detect metadata PES packets
+        // use the stream ID to detect metadata PES packets
         int streamId = packet.get(offset);
-          // stream id 0xBD - Private Stream is supposed to be used for
-          // metadata, but doesn't seem to be here.
 
         offset++;
         length = packet.getShort(offset);
@@ -118,11 +117,13 @@ public class TSExtractor extends Extractor {
         int dataAlignmentIndicator = packet.get(offset);
         offset++;
 
+        // determine PTS_DTS_flags and get PES header data length
         int flags = packet.get(offset++);
         int headerDataLength = packet.get(offset++);
         int fixedOffset = offset;
 
         if ((flags & 0x80) == 0x80) {
+          // PTS
           pts = (long)(packet.get(offset++) & 0x0e) << 28;
           pts |= (packet.get(offset++)) << 21;
           pts |= (packet.get(offset++) & 0xfe) << 13;
@@ -143,13 +144,14 @@ public class TSExtractor extends Extractor {
         // The packet length is greater than 0.
         // The PTS_DTS bits are set to '10'.
         // The stream ID is for a private stream (this doesnt appear to be correct).
-        if (((dataAlignmentIndicator & 0x84) == 0x84) && (length > 0) && ((flags & 0x80) == 0x80) && (streamId == 13)) {
+        if (((dataAlignmentIndicator & 0x84) == 0x84) && (length > 0) && ((flags & 0x80) == 0x80) && ((streamId & 0xD) == 0xD)) {
             String id3Tag = new String(packet.array(), offset, 3);
 
             if (!id3Tag.equals("ID3")) {
                 Log.e(TAG, "Error - not an ID3 tag. Header did not start with 'ID3'");
             }
 
+            // skip the 2 version bytes for the ID3 tag
             int id3TagOffset = offset + 5;
             int id3Flags = packet.get(id3TagOffset);
             boolean id3ExtendedHeader = (id3Flags & 0x40) !=0;
@@ -170,16 +172,13 @@ public class TSExtractor extends Extractor {
             int sizeOffset = id3TagOffset + size;
             while (id3TagOffset < sizeOffset) {
                 String tag = new String(packet.array(), id3TagOffset, 4);
-                // send the tag somewhere?
                 id3TagOffset += 4;
                 int tagSize = getSynchSafeInteger(packet, id3TagOffset);
                 id3TagOffset += 6; // 4 for the size, skipped the 2 for the flags
-
                 String id3Data = new String(packet.array(), id3TagOffset, tagSize);
                 long timeStamp = pts/45;
-                // move the ID3 data and timestamp somewhere..
-
                 id3TagOffset += tagSize;
+                // Take the timestamp, tag and data and push to one of the event handlers.
             }
         }
 
