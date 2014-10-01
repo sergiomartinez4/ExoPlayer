@@ -14,6 +14,8 @@ import com.google.android.exoplayer.ParserException;
 import com.google.android.exoplayer.SampleHolder;
 import com.google.android.exoplayer.SampleSource;
 import com.google.android.exoplayer.TrackInfo;
+import com.google.android.exoplayer.metadata.ID3Utils;
+import com.google.android.exoplayer.metadata.ID3Utils.ID3Tag;
 import com.google.android.exoplayer.parser.aac.AACExtractor;
 import com.google.android.exoplayer.parser.h264.H264Utils;
 import com.google.android.exoplayer.parser.h264.H264Utils.SPS;
@@ -115,6 +117,7 @@ public class HLSSampleSource implements SampleSource {
   public interface EventListener {
     void onQualitiesParsed(Quality qualities[]);
     void onChunkStart(Quality quality);
+    void onID3Data(ID3Tag id3Tag);
   }
 
   static class ChunkSentinel {
@@ -734,6 +737,7 @@ public class HLSSampleSource implements SampleSource {
         if (sample == null) {
           break;
         }
+
         synchronized (source.list) {
           if (!aborted) {
 
@@ -785,6 +789,19 @@ public class HLSSampleSource implements SampleSource {
               videoMediaFormat = sentinel.mediaFormat;
               sentinel.entry = chunk.mainEntry;
               list.get(Packet.TYPE_VIDEO).add(sentinel);
+            } else if (sample.type == Packet.TYPE_METADATA) {
+              if (metaDataStreamType == Extractor.STREAM_TYPE_METADATA_PES) {
+                  final ID3Tag id3Tag = ID3Utils.parseID3Tag(new Packet.UnsignedByteArray(sample.data.array()));
+                  id3Tag.timestamp = sample.pts/45;
+                  if (eventListener != null && eventHandler != null) {
+                    eventHandler.post(new Runnable() {
+                        @Override
+                        public void run() {
+                            eventListener.onID3Data(id3Tag);
+                        }
+                    });
+                }
+              }
             }
 
             list.get(sample.type).add(sample);

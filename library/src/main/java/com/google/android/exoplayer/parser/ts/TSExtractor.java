@@ -145,41 +145,9 @@ public class TSExtractor extends Extractor {
         // The PTS_DTS bits are set to '10'.
         // The stream ID is for a private stream (this doesnt appear to be correct).
         if (((dataAlignmentIndicator & 0x84) == 0x84) && (length > 0) && ((flags & 0x80) == 0x80) && ((streamId & 0xD) == 0xD)) {
-            String id3Tag = new String(packet.array(), offset, 3);
 
-            if (!id3Tag.equals("ID3")) {
-                Log.e(TAG, "Error - not an ID3 tag. Header did not start with 'ID3'");
-            }
+        } else {
 
-            // skip the 2 version bytes for the ID3 tag
-            int id3TagOffset = offset + 5;
-            int id3Flags = packet.get(id3TagOffset);
-            boolean id3ExtendedHeader = (id3Flags & 0x40) !=0;
-
-            id3TagOffset++;
-
-            int size = getSynchSafeInteger(packet, id3TagOffset);
-            if (size == 0 || size > packet.length()) {
-                Log.e(TAG, "Error - ID3 tag size is incorrect.");
-            }
-
-            id3TagOffset+=4;
-
-            if (id3ExtendedHeader) {
-                id3TagOffset += 10;
-            }
-
-            int sizeOffset = id3TagOffset + size;
-            while (id3TagOffset < sizeOffset) {
-                String tag = new String(packet.array(), id3TagOffset, 4);
-                id3TagOffset += 4;
-                int tagSize = getSynchSafeInteger(packet, id3TagOffset);
-                id3TagOffset += 6; // 4 for the size, skipped the 2 for the flags
-                String id3Data = new String(packet.array(), id3TagOffset, tagSize);
-                long timeStamp = pts/45;
-                id3TagOffset += tagSize;
-                // Take the timestamp, tag and data and push to one of the event handlers.
-            }
         }
 
         if (length > 0)
@@ -206,10 +174,6 @@ public class TSExtractor extends Extractor {
       }
     }
   }
-
-    private static int getSynchSafeInteger(Packet.UnsignedByteArray data, int offset) {
-        return (data.get(offset) << 21) | (data.get(offset + 1) << 14) | (data.get(offset + 2) << 7) | (data.get(offset + 3));
-    }
 
   abstract class SectionHandler extends PayloadHandler {
     protected int tableID;
@@ -513,8 +477,12 @@ public class TSExtractor extends Extractor {
   public int getStreamType(int type) {
     if (type == Packet.TYPE_AUDIO) {
       return audioStreamType;
-    } else {
+    } else if (type == Packet.TYPE_VIDEO) {
       return videoStreamType;
+    } else if (type == Packet.TYPE_METADATA) {
+      return metaDataStreamType;
+    } else {
+      return -1;
     }
   }
 }
