@@ -15,18 +15,18 @@
  */
 package com.google.android.exoplayer.parser.ts;
 
+import android.annotation.SuppressLint;
+import android.media.MediaExtractor;
+import android.util.Log;
+import android.util.Pair;
+import android.util.SparseArray;
+
 import com.google.android.exoplayer.MediaFormat;
 import com.google.android.exoplayer.SampleHolder;
 import com.google.android.exoplayer.upstream.NonBlockingInputStream;
 import com.google.android.exoplayer.util.Assertions;
 import com.google.android.exoplayer.util.CodecSpecificDataUtil;
 import com.google.android.exoplayer.util.MimeTypes;
-
-import android.annotation.SuppressLint;
-import android.media.MediaExtractor;
-import android.util.Log;
-import android.util.Pair;
-import android.util.SparseArray;
 
 import java.nio.ByteBuffer;
 import java.util.Collections;
@@ -59,6 +59,7 @@ public final class TsExtractor {
 
   private static final int TS_STREAM_TYPE_AAC = 0x0F;
   private static final int TS_STREAM_TYPE_H264 = 0x1B;
+  private static final int TS_STREAM_TYPE_METADATA_PES = 0x15;
 
   private static final int DEFAULT_BUFFER_SEGMENT_SIZE = 64 * 1024;
 
@@ -348,6 +349,9 @@ public final class TsExtractor {
           case TS_STREAM_TYPE_H264:
             pesPayloadReader = new H264Reader();
             break;
+          case TS_STREAM_TYPE_METADATA_PES:
+            pesPayloadReader = new ID3Reader();
+            break;
         }
 
         if (pesPayloadReader != null) {
@@ -534,7 +538,7 @@ public final class TsExtractor {
     public H264Reader() {
       // TODO: Parse the format from the stream.
       setMediaFormat(MediaFormat.createVideoFormat(MimeTypes.VIDEO_H264, MediaFormat.NO_VALUE,
-          1920, 1080, null));
+              1920, 1080, null));
     }
 
     @Override
@@ -689,6 +693,86 @@ public final class TsExtractor {
       adtsBuffer.reset();
     }
 
+  }
+
+  private class ID3Reader extends PesPayloadReader {
+
+      private final BitsArray id3Buffer;
+
+      public ID3Reader() {
+        id3Buffer = new BitsArray();
+        setMediaFormat(MediaFormat.createMetadataFormat());
+      }
+
+      @Override
+      public void read(BitsArray pesBuffer, int pesPayloadSize, long pesTimeUs) {
+          id3Buffer.append(pesBuffer, pesPayloadSize);
+          byte[] id3Bytes = new byte[3];
+          id3Buffer.readBytes(id3Bytes, 0, 3);
+          String id3String = new String(id3Bytes);
+
+          if (!id3String.equals("ID3")) {
+              Log.e(TAG, "Error = not an ID3 tag. Header did not start with 'ID3");
+          }
+
+          id3Buffer.skipBytes(2);
+          int id3Flags = id3Buffer.readBits(8);
+          boolean id3ExtendedHeader = (id3Flags & 0x40) != 0;
+          int size = id3Buffer.readBits(32);
+          if (size == 0 || size > pesPayloadSize) {
+              Log.e(TAG, "Error - ID3 tag size is incorrect.");
+          }
+          if (id3ExtendedHeader) {
+              id3Buffer.skipBytes(10);
+          }
+
+          byte[] frameId = new byte[4];
+          id3Buffer.readBytes(frameId, id3Buffer.getByteOffset(), 4);
+          String frameIdStr = new String(frameId);
+          Log.v(TAG, "ID3 frameIdStr: " + frameIdStr);
+
+//              // skip the 2 version bytes for the ID3 tag
+//              int id3TagOffset = offset + 5;
+//              int id3Flags = packet.get(id3TagOffset);
+//              boolean id3ExtendedHeader = (id3Flags & 0x40) !=0;
+//
+//              id3TagOffset++;
+//
+//              int size = getSynchSafeInteger(packet, id3TagOffset);
+//              if (size == 0 || size > packet.length()) {
+//                  Log.e(TAG, "Error - ID3 tag size is incorrect.");
+//              }
+//
+//              id3TagOffset+=4;
+//
+//              if (id3ExtendedHeader) {
+//                  id3TagOffset += 10;
+//              }
+//
+//              List<ID3Data> id3Data = new ArrayList<ID3Data>();
+//
+//              int sizeOffset = id3TagOffset + size;
+//              while (id3TagOffset < sizeOffset) {
+//                  String frameId = new String(packet.array(), id3TagOffset, 4);
+//                  id3TagOffset += 4;
+//                  int frameSize = getSynchSafeInteger(packet, id3TagOffset);
+//                  id3TagOffset += 6; // 4 for the size, skipped the 2 for the flags
+//                  String frameData = new String(packet.array(), id3TagOffset, frameSize);
+//                  id3Data.add(new ID3Data(frameId, frameData));
+//
+//                  id3TagOffset += frameSize;
+//              }
+
+
+
+          id3Buffer.reset();
+      }
+
+      @Override
+      public void clear() {
+          super.clear();
+          id3Buffer.reset();
+      }
   }
 
   /**

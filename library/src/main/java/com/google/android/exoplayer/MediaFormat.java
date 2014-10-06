@@ -15,10 +15,11 @@
  */
 package com.google.android.exoplayer;
 
-import com.google.android.exoplayer.util.Util;
-
 import android.annotation.SuppressLint;
 import android.annotation.TargetApi;
+
+import com.google.android.exoplayer.util.MimeTypes;
+import com.google.android.exoplayer.util.Util;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -76,6 +77,10 @@ public class MediaFormat {
       int sampleRate, List<byte[]> initializationData) {
     return new MediaFormat(mimeType, maxInputSize, NO_VALUE, NO_VALUE, NO_VALUE, channelCount,
         sampleRate, initializationData);
+  }
+
+  public static MediaFormat createMetadataFormat() {
+      return new MediaFormat(MimeTypes.TEXT_VTT, NO_VALUE, NO_VALUE, NO_VALUE, NO_VALUE, NO_VALUE, NO_VALUE, null);
   }
 
   @TargetApi(16)
