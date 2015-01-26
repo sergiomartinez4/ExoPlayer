@@ -43,7 +43,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
  * A wrapper around {@link ExoPlayer} that provides a higher level interface. It can be prepared
- * with one of a number of {@link RendererBuilder} classes to suit different use cases (e.g. DASH,
+ * with one of a number of {@link RendererBuilder} classes to suit different use cases (e.g.DASH,
  * SmoothStreaming and so on).
  */
 public class DemoPlayer implements ExoPlayer.Listener, ChunkSampleSource.EventListener,
