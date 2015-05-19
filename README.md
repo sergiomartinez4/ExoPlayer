@@ -5,26 +5,27 @@
 ExoPlayer is an application level media player for Android. It provides an
 alternative to Android’s MediaPlayer API for playing audio and video both
 locally and over the Internet. ExoPlayer supports features not currently
-supported by Android’s MediaPlayer API (as of KitKat), including DASH and
-SmoothStreaming adaptive playbacks, persistent caching and custom renderers.
-Unlike the MediaPlayer API, ExoPlayer is easy to customize and extend, and
-can be updated through Play Store application updates.
+supported by Android’s MediaPlayer API, including DASH and SmoothStreaming
+adaptive playbacks. Unlike the MediaPlayer API, ExoPlayer is easy to
+customize and extend, and can be updated through Play Store application
+updates.
 
+## News ##
 
-## Developer guide ##
+Read news, hints and tips on the [news][] page.
 
-The [ExoPlayer developer guide][] provides a wealth of information to help you
-get started.
+[news]: https://google.github.io/ExoPlayer/news.html
 
-[ExoPlayer developer guide]: http://developer.android.com/guide/topics/media/exoplayer.html
+## Documentation ##
 
+* The [developer guide][] provides a wealth of information to help you get
+started.
+* The [class reference][] documents the ExoPlayer library classes.
+* The [release notes][] document the major changes in each release.
 
-## Reference documentation ##
-
-[Class reference][] (Documents the ExoPlayer library classes).
-
-[Class reference]: http://google.github.io/ExoPlayer/doc/reference/com/google/android/exoplayer/package-summary.html
-
+[developer guide]: https://google.github.io/ExoPlayer/guide.html
+[class reference]: https://google.github.io/ExoPlayer/doc/reference
+[release notes]: https://github.com/google/ExoPlayer/blob/dev/RELEASENOTES.md
 
 ## Project branches ##
 
@@ -34,7 +35,6 @@ get started.
 
 [master]: https://github.com/google/ExoPlayer/tree/master
 [dev]: https://github.com/google/ExoPlayer/tree/dev
-
 
 ## Using Eclipse ##
 
