@@ -136,6 +136,7 @@ public class HlsChunkSource {
 
   // The index in variants of the currently selected variant.
   private int selectedVariantIndex;
+  private boolean lastChunkIndexOutOfBounds;
 
   private byte[] scratchSpace;
   private boolean live;
@@ -282,7 +283,7 @@ public class HlsChunkSource {
     if (live) {
       if (previousTsChunk == null) {
         chunkMediaSequence = Util.binarySearchFloor(mediaPlaylist.segments, seekPositionUs, true, true) + mediaPlaylist.mediaSequence;
-        int liveStartMediaSequence = getLiveStartChunkMediaSequence(variantIndex);
+        int liveStartMediaSequence = getLiveStartChunkMediaSequence(selectedVariantIndex);
 
         // If chunkMediaSequence is beyond the live start position, we will use live start instead.
         if( chunkMediaSequence > liveStartMediaSequence ) {
@@ -305,8 +306,8 @@ public class HlsChunkSource {
       }
     }
 
-    if( mediaPlaylist.live && (shouldRerequestMediaPlaylist(variantIndex) || chunkMediaSequence > getLiveStartChunkMediaSequence(variantIndex)) ) {
-        return newMediaPlaylistChunk(variantIndex);
+    if( mediaPlaylist.live && (shouldRerequestMediaPlaylist(selectedVariantIndex) || chunkMediaSequence > getLiveStartChunkMediaSequence(selectedVariantIndex)) ) {
+        return newMediaPlaylistChunk(selectedVariantIndex);
     }
 
     int chunkIndex = chunkMediaSequence - mediaPlaylist.mediaSequence;
@@ -315,7 +316,7 @@ public class HlsChunkSource {
             return null;
         } else {
             lastChunkIndexOutOfBounds = true;
-            return newMediaPlaylistChunk(variantIndex);
+            return newMediaPlaylistChunk(selectedVariantIndex);
         }
     }
 
