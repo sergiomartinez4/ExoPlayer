@@ -356,6 +356,11 @@ public class HlsSampleSource implements SampleSource, SampleSourceReader, Loader
     if (isTsChunk(currentLoadable)) {
       TsChunk tsChunk = (TsChunk) loadable;
       loadingFinished = tsChunk.isLastChunk;
+
+      for(TrackInfo info : trackInfos) {
+          info.durationUs = chunkSource.getDurationUs();
+      }
+
       notifyLoadCompleted(currentLoadable.bytesLoaded(), tsChunk.type, tsChunk.trigger,
           tsChunk.format, tsChunk.startTimeUs, tsChunk.endTimeUs, now, loadDurationMs);
     } else {

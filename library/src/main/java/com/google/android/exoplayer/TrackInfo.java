@@ -28,7 +28,7 @@ public final class TrackInfo {
   /**
    * The duration in microseconds, or {@link C#UNKNOWN_TIME_US} if the duration is unknown.
    */
-  public final long durationUs;
+  public long durationUs;
 
   /**
    * @param mimeType The mime type.

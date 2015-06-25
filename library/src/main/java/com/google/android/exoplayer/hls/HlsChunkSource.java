@@ -141,6 +141,8 @@ public class HlsChunkSource {
   private String encryptionIvString;
   private byte[] encryptionIv;
 
+  private boolean lastChunkIndexOutOfBounds;
+
   public HlsChunkSource(DataSource dataSource, String playlistUrl, HlsPlaylist playlist,
       BandwidthMeter bandwidthMeter, int[] variantIndices, int adaptiveMode,
       AudioCapabilities audioCapabilities) {
@@ -216,7 +218,7 @@ public class HlsChunkSource {
   }
 
   public long getDurationUs() {
-    return live ? C.UNKNOWN_TIME_US : durationUs;
+    return durationUs;
   }
 
   /**
@@ -240,8 +242,7 @@ public class HlsChunkSource {
    * @param playbackPositionUs The current playback position.
    * @return The next chunk to load.
    */
-  public Chunk getChunkOperation(TsChunk previousTsChunk, long seekPositionUs,
-      long playbackPositionUs) {
+  public Chunk getChunkOperation(TsChunk previousTsChunk, long seekPositionUs, long playbackPositionUs) {
     int nextFormatIndex;
     boolean switchingVariantSpliced;
     if (adaptiveMode == ADAPTIVE_MODE_NONE) {
@@ -265,36 +266,45 @@ public class HlsChunkSource {
     boolean liveDiscontinuity = false;
     if (live) {
       if (previousTsChunk == null) {
-        chunkMediaSequence = getLiveStartChunkMediaSequence(variantIndex);
+        chunkMediaSequence = Util.binarySearchFloor(mediaPlaylist.segments, seekPositionUs, true, true) + mediaPlaylist.mediaSequence;
+        int liveStartMediaSequence = getLiveStartChunkMediaSequence(variantIndex);
+
+        // If chunkMediaSequence is beyond the live start position, we will use live start instead.
+        if( chunkMediaSequence > liveStartMediaSequence ) {
+            chunkMediaSequence = liveStartMediaSequence;
+        }
       } else {
-        chunkMediaSequence = switchingVariantSpliced
-            ? previousTsChunk.chunkIndex : previousTsChunk.chunkIndex + 1;
+        chunkMediaSequence = switchingVariantSpliced ? previousTsChunk.chunkIndex : previousTsChunk.chunkIndex + 1;
         if (chunkMediaSequence < mediaPlaylist.mediaSequence) {
           // If the chunk is no longer in the playlist. Skip ahead and start again.
-          chunkMediaSequence = getLiveStartChunkMediaSequence(variantIndex);
+          chunkMediaSequence = mediaPlaylist.mediaSequence;
           liveDiscontinuity = true;
         }
       }
     } else {
       // Not live.
       if (previousTsChunk == null) {
-        chunkMediaSequence = Util.binarySearchFloor(mediaPlaylist.segments, seekPositionUs, true,
-            true) + mediaPlaylist.mediaSequence;
+        chunkMediaSequence = Util.binarySearchFloor(mediaPlaylist.segments, seekPositionUs, true, true) + mediaPlaylist.mediaSequence;
       } else {
-        chunkMediaSequence = switchingVariantSpliced
-            ? previousTsChunk.chunkIndex : previousTsChunk.chunkIndex + 1;
+        chunkMediaSequence = switchingVariantSpliced ? previousTsChunk.chunkIndex : previousTsChunk.chunkIndex + 1;
       }
+    }
+
+    if( mediaPlaylist.live && (shouldRerequestMediaPlaylist(variantIndex) || chunkMediaSequence > getLiveStartChunkMediaSequence(variantIndex)) ) {
+        return newMediaPlaylistChunk(variantIndex);
     }
 
     int chunkIndex = chunkMediaSequence - mediaPlaylist.mediaSequence;
     if (chunkIndex >= mediaPlaylist.segments.size()) {
-      if (mediaPlaylist.live && shouldRerequestMediaPlaylist(variantIndex)) {
-        return newMediaPlaylistChunk(variantIndex);
-      } else {
-        return null;
-      }
+        if( lastChunkIndexOutOfBounds ) {
+            return null;
+        } else {
+            lastChunkIndexOutOfBounds = true;
+            return newMediaPlaylistChunk(variantIndex);
+        }
     }
 
+    lastChunkIndexOutOfBounds = false;
     HlsMediaPlaylist.Segment segment = mediaPlaylist.segments.get(chunkIndex);
     Uri chunkUri = UriUtil.resolveToUri(mediaPlaylist.baseUri, segment.url);
 
@@ -318,20 +328,9 @@ public class HlsChunkSource {
         null);
 
     // Compute start and end times, and the sequence number of the next chunk.
-    long startTimeUs;
-    if (live) {
-      if (previousTsChunk == null) {
-        startTimeUs = 0;
-      } else if (switchingVariantSpliced) {
-        startTimeUs = previousTsChunk.startTimeUs;
-      } else {
-        startTimeUs = previousTsChunk.endTimeUs;
-      }
-    } else /* Not live */ {
-      startTimeUs = segment.startTimeUs;
-    }
+    long startTimeUs = segment.startTimeUs;
     long endTimeUs = startTimeUs + (long) (segment.durationSecs * C.MICROS_PER_SECOND);
-    boolean isLastChunk = !mediaPlaylist.live && chunkIndex == mediaPlaylist.segments.size() - 1;
+    boolean isLastChunk = chunkIndex == mediaPlaylist.segments.size() - 1;
     int trigger = Chunk.TRIGGER_UNSPECIFIED;
     Format format = enabledFormats[formatIndex];
 
