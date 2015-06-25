@@ -21,10 +21,10 @@ import com.google.android.exoplayer.dash.mpd.SegmentBase.SegmentList;
 import com.google.android.exoplayer.dash.mpd.SegmentBase.SegmentTemplate;
 import com.google.android.exoplayer.dash.mpd.SegmentBase.SegmentTimelineElement;
 import com.google.android.exoplayer.dash.mpd.SegmentBase.SingleSegmentBase;
+import com.google.android.exoplayer.extractor.mp4.PsshAtomUtil;
 import com.google.android.exoplayer.upstream.UriLoadable;
 import com.google.android.exoplayer.util.Assertions;
 import com.google.android.exoplayer.util.MimeTypes;
-import com.google.android.exoplayer.util.ParsableByteArray;
 import com.google.android.exoplayer.util.UriUtil;
 import com.google.android.exoplayer.util.Util;
 
@@ -185,11 +185,14 @@ public class MediaPresentationDescriptionParser extends DefaultHandler
   protected AdaptationSet parseAdaptationSet(XmlPullParser xpp, String baseUrl, long periodStartMs,
       long periodDurationMs, SegmentBase segmentBase) throws XmlPullParserException, IOException {
 
+    int id = parseInt(xpp, "id", -1);
     String mimeType = xpp.getAttributeValue(null, "mimeType");
     String language = xpp.getAttributeValue(null, "lang");
-    int contentType = parseAdaptationSetTypeFromMimeType(mimeType);
+    int contentType = parseAdaptationSetType(xpp.getAttributeValue(null, "contentType"));
+    if (contentType == AdaptationSet.TYPE_UNKNOWN) {
+      contentType = parseAdaptationSetTypeFromMimeType(xpp.getAttributeValue(null, "mimeType"));
+    }
 
-    int id = -1;
     ContentProtectionsBuilder contentProtectionsBuilder = new ContentProtectionsBuilder();
     List<Representation> representations = new ArrayList<>();
     do {
@@ -199,7 +202,7 @@ public class MediaPresentationDescriptionParser extends DefaultHandler
       } else if (isStartTag(xpp, "ContentProtection")) {
         contentProtectionsBuilder.addAdaptationSetProtection(parseContentProtection(xpp));
       } else if (isStartTag(xpp, "ContentComponent")) {
-        id = Integer.parseInt(xpp.getAttributeValue(null, "id"));
+        language = checkLanguageConsistency(language, xpp.getAttributeValue(null, "lang"));
         contentType = checkAdaptationSetTypeConsistency(contentType,
             parseAdaptationSetType(xpp.getAttributeValue(null, "contentType")));
       } else if (isStartTag(xpp, "Representation")) {
@@ -246,28 +249,6 @@ public class MediaPresentationDescriptionParser extends DefaultHandler
   }
 
   /**
-   * Checks two adaptation set types for consistency, returning the consistent type, or throwing an
-   * {@link IllegalStateException} if the types are inconsistent.
-   * <p>
-   * Two types are consistent if they are equal, or if one is {@link AdaptationSet#TYPE_UNKNOWN}.
-   * Where one of the types is {@link AdaptationSet#TYPE_UNKNOWN}, the other is returned.
-   *
-   * @param firstType The first type.
-   * @param secondType The second type.
-   * @return The consistent type.
-   */
-  private int checkAdaptationSetTypeConsistency(int firstType, int secondType) {
-    if (firstType == AdaptationSet.TYPE_UNKNOWN) {
-      return secondType;
-    } else if (secondType == AdaptationSet.TYPE_UNKNOWN) {
-      return firstType;
-    } else {
-      Assertions.checkState(firstType == secondType);
-      return firstType;
-    }
-  }
-
-  /**
    * Parses a ContentProtection element.
    *
    * @throws XmlPullParserException If an error occurs parsing the element.
@@ -277,22 +258,20 @@ public class MediaPresentationDescriptionParser extends DefaultHandler
       throws XmlPullParserException, IOException {
     String schemeIdUri = xpp.getAttributeValue(null, "schemeIdUri");
     UUID uuid = null;
-    byte[] data = null;
+    byte[] psshAtom = null;
     do {
       xpp.next();
       // The cenc:pssh element is defined in 23001-7:2015
       if (isStartTag(xpp, "cenc:pssh") && xpp.next() == XmlPullParser.TEXT) {
-        byte[] decodedData = Base64.decode(xpp.getText(), Base64.DEFAULT);
-        ParsableByteArray psshAtom = new ParsableByteArray(decodedData);
-        psshAtom.skipBytes(12);
-        uuid = new UUID(psshAtom.readLong(), psshAtom.readLong());
-        int dataSize = psshAtom.readInt();
-        data = new byte[dataSize];
-        psshAtom.readBytes(data, 0, dataSize);
+        psshAtom = Base64.decode(xpp.getText(), Base64.DEFAULT);
+        uuid = PsshAtomUtil.parseUuid(psshAtom);
+        if (uuid == null) {
+          throw new ParserException("Invalid pssh atom in cenc:pssh element");
+        }
       }
     } while (!isEndTag(xpp, "ContentProtection"));
 
-    return buildContentProtection(schemeIdUri, uuid, data);
+    return buildContentProtection(schemeIdUri, uuid, psshAtom);
   }
 
   protected ContentProtection buildContentProtection(String schemeIdUri, UUID uuid, byte[] data) {
@@ -560,6 +539,49 @@ public class MediaPresentationDescriptionParser extends DefaultHandler
   }
 
   // Utility methods.
+
+  /**
+   * Checks two languages for consistency, returning the consistent language, or throwing an
+   * {@link IllegalStateException} if the languages are inconsistent.
+   * <p>
+   * Two languages are consistent if they are equal, or if one is null.
+   *
+   * @param firstLanguage The first language.
+   * @param secondLanguage The second language.
+   * @return The consistent language.
+   */
+  private static String checkLanguageConsistency(String firstLanguage, String secondLanguage) {
+    if (firstLanguage == null) {
+      return secondLanguage;
+    } else if (secondLanguage == null) {
+      return firstLanguage;
+    } else {
+      Assertions.checkState(firstLanguage.equals(secondLanguage));
+      return firstLanguage;
+    }
+  }
+
+  /**
+   * Checks two adaptation set types for consistency, returning the consistent type, or throwing an
+   * {@link IllegalStateException} if the types are inconsistent.
+   * <p>
+   * Two types are consistent if they are equal, or if one is {@link AdaptationSet#TYPE_UNKNOWN}.
+   * Where one of the types is {@link AdaptationSet#TYPE_UNKNOWN}, the other is returned.
+   *
+   * @param firstType The first type.
+   * @param secondType The second type.
+   * @return The consistent type.
+   */
+  private static int checkAdaptationSetTypeConsistency(int firstType, int secondType) {
+    if (firstType == AdaptationSet.TYPE_UNKNOWN) {
+      return secondType;
+    } else if (secondType == AdaptationSet.TYPE_UNKNOWN) {
+      return firstType;
+    } else {
+      Assertions.checkState(firstType == secondType);
+      return firstType;
+    }
+  }
 
   protected static boolean isEndTag(XmlPullParser xpp, String name) throws XmlPullParserException {
     return xpp.getEventType() == XmlPullParser.END_TAG && name.equals(xpp.getName());
