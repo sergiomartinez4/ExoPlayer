@@ -136,6 +136,7 @@ public class HlsChunkSource {
 
   // The index in variants of the currently selected variant.
   private int selectedVariantIndex;
+  private boolean lastChunkIndexOutOfBounds;
 
   private byte[] scratchSpace;
   private boolean live;
@@ -228,7 +229,7 @@ public class HlsChunkSource {
   }
 
   public long getDurationUs() {
-    return live ? C.UNKNOWN_TIME_US : durationUs;
+    return durationUs;
   }
 
   /**
@@ -281,36 +282,45 @@ public class HlsChunkSource {
     boolean liveDiscontinuity = false;
     if (live) {
       if (previousTsChunk == null) {
-        chunkMediaSequence = getLiveStartChunkMediaSequence(nextVariantIndex);
+        chunkMediaSequence = Util.binarySearchFloor(mediaPlaylist.segments, seekPositionUs, true, true) + mediaPlaylist.mediaSequence;
+        int liveStartMediaSequence = getLiveStartChunkMediaSequence(selectedVariantIndex);
+
+        // If chunkMediaSequence is beyond the live start position, we will use live start instead.
+        if( chunkMediaSequence > liveStartMediaSequence ) {
+            chunkMediaSequence = liveStartMediaSequence;
+        }
       } else {
-        chunkMediaSequence = switchingVariantSpliced
-            ? previousTsChunk.chunkIndex : previousTsChunk.chunkIndex + 1;
+        chunkMediaSequence = switchingVariantSpliced ? previousTsChunk.chunkIndex : previousTsChunk.chunkIndex + 1;
         if (chunkMediaSequence < mediaPlaylist.mediaSequence) {
           // If the chunk is no longer in the playlist. Skip ahead and start again.
-          chunkMediaSequence = getLiveStartChunkMediaSequence(nextVariantIndex);
+          chunkMediaSequence = mediaPlaylist.mediaSequence;
           liveDiscontinuity = true;
         }
       }
     } else {
       // Not live.
       if (previousTsChunk == null) {
-        chunkMediaSequence = Util.binarySearchFloor(mediaPlaylist.segments, seekPositionUs, true,
-            true) + mediaPlaylist.mediaSequence;
+        chunkMediaSequence = Util.binarySearchFloor(mediaPlaylist.segments, seekPositionUs, true, true) + mediaPlaylist.mediaSequence;
       } else {
-        chunkMediaSequence = switchingVariantSpliced
-            ? previousTsChunk.chunkIndex : previousTsChunk.chunkIndex + 1;
+        chunkMediaSequence = switchingVariantSpliced ? previousTsChunk.chunkIndex : previousTsChunk.chunkIndex + 1;
       }
+    }
+
+    if( mediaPlaylist.live && (shouldRerequestMediaPlaylist(selectedVariantIndex) || chunkMediaSequence > getLiveStartChunkMediaSequence(selectedVariantIndex)) ) {
+        return newMediaPlaylistChunk(selectedVariantIndex);
     }
 
     int chunkIndex = chunkMediaSequence - mediaPlaylist.mediaSequence;
     if (chunkIndex >= mediaPlaylist.segments.size()) {
-      if (mediaPlaylist.live && shouldRerequestMediaPlaylist(nextVariantIndex)) {
-        return newMediaPlaylistChunk(nextVariantIndex);
-      } else {
-        return null;
-      }
+        if( lastChunkIndexOutOfBounds ) {
+            return null;
+        } else {
+            lastChunkIndexOutOfBounds = true;
+            return newMediaPlaylistChunk(selectedVariantIndex);
+        }
     }
 
+    lastChunkIndexOutOfBounds = false;
     HlsMediaPlaylist.Segment segment = mediaPlaylist.segments.get(chunkIndex);
     Uri chunkUri = UriUtil.resolveToUri(mediaPlaylist.baseUri, segment.url);
 
@@ -334,20 +344,9 @@ public class HlsChunkSource {
         null);
 
     // Compute start and end times, and the sequence number of the next chunk.
-    long startTimeUs;
-    if (live) {
-      if (previousTsChunk == null) {
-        startTimeUs = 0;
-      } else if (switchingVariantSpliced) {
-        startTimeUs = previousTsChunk.startTimeUs;
-      } else {
-        startTimeUs = previousTsChunk.endTimeUs;
-      }
-    } else /* Not live */ {
-      startTimeUs = segment.startTimeUs;
-    }
+    long startTimeUs = segment.startTimeUs;
     long endTimeUs = startTimeUs + (long) (segment.durationSecs * C.MICROS_PER_SECOND);
-    boolean isLastChunk = !mediaPlaylist.live && chunkIndex == mediaPlaylist.segments.size() - 1;
+    boolean isLastChunk = chunkIndex == mediaPlaylist.segments.size() - 1;
     int trigger = Chunk.TRIGGER_UNSPECIFIED;
     Format format = variants[selectedVariantIndex].format;
 

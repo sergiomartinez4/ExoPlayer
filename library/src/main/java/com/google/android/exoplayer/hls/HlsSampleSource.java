@@ -371,6 +371,11 @@ public final class HlsSampleSource implements SampleSource, SampleSourceReader, 
       Assertions.checkState(currentLoadable == currentTsLoadable);
       loadingFinished = currentTsLoadable.isLastChunk;
       previousTsLoadable = currentTsLoadable;
+      
+      for(TrackInfo info : trackInfos) {
+          info.durationUs = chunkSource.getDurationUs();
+      }
+
       notifyLoadCompleted(currentLoadable.bytesLoaded(), currentTsLoadable.type,
           currentTsLoadable.trigger, currentTsLoadable.format, currentTsLoadable.startTimeUs,
           currentTsLoadable.endTimeUs, now, loadDurationMs);
