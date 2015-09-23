@@ -141,7 +141,7 @@ public class HlsChunkSource {
   private byte[] scratchSpace;
   private boolean live;
   private long durationUs;
-
+  private int targetDurationSecs;
   private Uri encryptionKeyUri;
   private byte[] encryptionKey;
   private String encryptionIvString;
@@ -192,6 +192,8 @@ public class HlsChunkSource {
       variantLastPlaylistLoadTimesMs = new long[1];
       variantBlacklistTimes = new long[1];
       setMediaPlaylist(0, (HlsMediaPlaylist) playlist);
+      targetDurationSecs = ((HlsMediaPlaylist) playlist).targetDurationSecs;
+
       // We won't be adapting between different variants.
       maxWidth = -1;
       maxHeight = -1;
@@ -230,6 +232,14 @@ public class HlsChunkSource {
 
   public long getDurationUs() {
     return durationUs;
+  }
+
+  public boolean isLive() {
+    return live;
+  }
+
+  public int getTargetDurationSecs() {
+    return targetDurationSecs;
   }
 
   /**
@@ -281,6 +291,7 @@ public class HlsChunkSource {
     int chunkMediaSequence = 0;
     boolean liveDiscontinuity = false;
     if (live) {
+      targetDurationSecs = mediaPlaylist.targetDurationSecs;
       if (previousTsChunk == null) {
         chunkMediaSequence = Util.binarySearchFloor(mediaPlaylist.segments, seekPositionUs, true, true) + mediaPlaylist.mediaSequence;
         int liveStartMediaSequence = getLiveStartChunkMediaSequence(selectedVariantIndex);
