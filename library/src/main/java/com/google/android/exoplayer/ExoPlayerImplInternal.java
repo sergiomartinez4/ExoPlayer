@@ -337,7 +337,10 @@ import java.util.List;
       long durationUs = 0;
       for (int i = 0; i < renderers.length; i++) {
           TrackRenderer renderer = renderers[i];
-          if (rendererEnabledFlags[i] && renderer.getState() != TrackRenderer.STATE_UNPREPARED && renderer.getState() != TrackRenderer.STATE_RELEASED ) {
+          if (rendererEnabledFlags[i]
+              && renderer.getState() != TrackRenderer.STATE_IGNORE
+              && renderer.getState() != TrackRenderer.STATE_UNPREPARED
+              && renderer.getState() != TrackRenderer.STATE_RELEASED ) {
               if (durationUs == TrackRenderer.UNKNOWN_TIME_US) {
                   // We've already encountered a track for which the duration is unknown, so the media
                   // duration is unknown regardless of the duration of this track.
