@@ -31,13 +31,20 @@ public final class Ac3Util {
       224, 256, 320, 384, 448, 512, 576, 640};
   /** 16-bit words per sync frame, indexed by frmsizecod / 2. (See ETSI TS 102 366 table 4.13.) */
   private static final int[] FRMSIZECOD_TO_FRAME_SIZE_44_1 = new int[] {69, 87, 104, 121, 139, 174,
-    208, 243, 278, 348, 417, 487, 557, 696, 835, 975, 1114, 1253, 1393};
+      208, 243, 278, 348, 417, 487, 557, 696, 835, 975, 1114, 1253, 1393};
 
   /**
    * Returns the AC-3 format given {@code data} containing the AC3SpecificBox according to
    * ETSI TS 102 366 Annex F.
+   *
+   * @param data The AC3SpecificBox.
+   * @param trackId The track identifier to set on the format, or null.
+   * @param durationUs The duration to set on the format, in microseconds.
+   * @param language The language to set on the format.
+   * @return The AC-3 format parsed from data in the header.
    */
-  public static MediaFormat parseAnnexFAc3Format(ParsableByteArray data) {
+  public static MediaFormat parseAnnexFAc3Format(ParsableByteArray data, String trackId,
+      long durationUs, String language) {
     // fscod (sample rate code)
     int fscod = (data.readUnsignedByte() & 0xC0) >> 6;
     int sampleRate = SAMPLE_RATES[fscod];
@@ -48,15 +55,22 @@ public final class Ac3Util {
     if ((nextByte & 0x04) != 0) {
       channelCount++;
     }
-    return MediaFormat.createAudioFormat(MimeTypes.AUDIO_AC3, MediaFormat.NO_VALUE,
-        channelCount, sampleRate, null);
+    return MediaFormat.createAudioFormat(trackId, MimeTypes.AUDIO_AC3, MediaFormat.NO_VALUE,
+        MediaFormat.NO_VALUE, durationUs, channelCount, sampleRate, null, language);
   }
 
   /**
-   * Returns the AC-3 format given {@code data} containing the EC3SpecificBox according to
+   * Returns the E-AC-3 format given {@code data} containing the EC3SpecificBox according to
    * ETSI TS 102 366 Annex F.
+   *
+   * @param data The EC3SpecificBox.
+   * @param trackId The track identifier to set on the format, or null.
+   * @param durationUs The duration to set on the format, in microseconds.
+   * @param language The language to set on the format.
+   * @return The E-AC-3 format parsed from data in the header.
    */
-  public static MediaFormat parseAnnexFEAc3Format(ParsableByteArray data) {
+  public static MediaFormat parseAnnexFEAc3Format(ParsableByteArray data, String trackId,
+      long durationUs, String language) {
     data.skipBytes(2); // Skip data_rate and num_ind_sub.
 
     // Read only the first substream.
@@ -71,8 +85,8 @@ public final class Ac3Util {
     if ((nextByte & 0x01) != 0) {
       channelCount++;
     }
-    return MediaFormat.createAudioFormat(MimeTypes.AUDIO_EC3, MediaFormat.NO_VALUE,
-        channelCount, sampleRate, null);
+    return MediaFormat.createAudioFormat(trackId, MimeTypes.AUDIO_EC3, MediaFormat.NO_VALUE,
+        MediaFormat.NO_VALUE, durationUs, channelCount, sampleRate, null, language);
   }
 
   /**
@@ -80,9 +94,13 @@ public final class Ac3Util {
    * word.
    *
    * @param data Data to parse, positioned at the start of the syncword.
-   * @return AC-3 format parsed from data in the header.
+   * @param trackId The track identifier to set on the format, or null.
+   * @param durationUs The duration to set on the format, in microseconds.
+   * @param language The language to set on the format.
+   * @return The AC-3 format parsed from data in the header.
    */
-  public static MediaFormat parseFrameAc3Format(ParsableBitArray data) {
+  public static MediaFormat parseFrameAc3Format(ParsableBitArray data, String trackId,
+      long durationUs, String language) {
     // Skip syncword and crc1.
     data.skipBits(4 * 8);
 
@@ -99,8 +117,9 @@ public final class Ac3Util {
       data.skipBits(2); // dsurmod
     }
     boolean lfeon = data.readBit();
-    return MediaFormat.createAudioFormat(MimeTypes.AUDIO_AC3, MediaFormat.NO_VALUE,
-        CHANNEL_COUNTS[acmod] + (lfeon ? 1 : 0), SAMPLE_RATES[fscod], null);
+    return MediaFormat.createAudioFormat(trackId, MimeTypes.AUDIO_AC3, MediaFormat.NO_VALUE,
+        MediaFormat.NO_VALUE, durationUs, CHANNEL_COUNTS[acmod] + (lfeon ? 1 : 0),
+        SAMPLE_RATES[fscod], null, language);
   }
 
   /**

@@ -17,6 +17,7 @@ package com.google.android.exoplayer.chunk;
 
 import com.google.android.exoplayer.MediaCodecUtil;
 import com.google.android.exoplayer.MediaCodecUtil.DecoderQueryException;
+import com.google.android.exoplayer.util.MimeTypes;
 import com.google.android.exoplayer.util.Util;
 
 import android.annotation.TargetApi;
@@ -50,16 +51,14 @@ public final class VideoFormatSelectorUtil {
    *     mime types.
    * @param filterHdFormats True to filter HD formats. False otherwise.
    * @return An array holding the indices of the selected formats.
-   * @throws DecoderQueryException
+   * @throws DecoderQueryException Thrown if there was an error querying decoders.
    */
   public static int[] selectVideoFormatsForDefaultDisplay(Context context,
       List<? extends FormatWrapper> formatWrappers, String[] allowedContainerMimeTypes,
       boolean filterHdFormats) throws DecoderQueryException {
-    WindowManager windowManager = (WindowManager) context.getSystemService(Context.WINDOW_SERVICE);
-    Display display = windowManager.getDefaultDisplay();
-    Point displaySize = getDisplaySize(display);
+    Point viewportSize = getViewportSize(context);
     return selectVideoFormats(formatWrappers, allowedContainerMimeTypes, filterHdFormats, true,
-        displaySize.x, displaySize.y);
+        viewportSize.x, viewportSize.y);
   }
 
   /**
@@ -125,7 +124,7 @@ public final class VideoFormatSelectorUtil {
     // unnecessarily high resolution given the size at which the video will be displayed within the
     // viewport.
     for (int i = selectedIndexList.size() - 1; i >= 0; i--) {
-      Format format = formatWrappers.get(i).getFormat();
+      Format format = formatWrappers.get(selectedIndexList.get(i)).getFormat();
       if (format.width > 0 && format.height > 0
           && format.width * format.height > maxVideoPixelsToRetain) {
         selectedIndexList.remove(i);
@@ -140,7 +139,7 @@ public final class VideoFormatSelectorUtil {
    * whether HD formats should be filtered and a maximum decodable frame size in pixels.
    */
   private static boolean isFormatPlayable(Format format, String[] allowedContainerMimeTypes,
-      boolean filterHdFormats, int maxDecodableFrameSize) {
+      boolean filterHdFormats, int maxDecodableFrameSize) throws DecoderQueryException {
     if (allowedContainerMimeTypes != null
         && !Util.contains(allowedContainerMimeTypes, format.mimeType)) {
       // Filtering format based on its container mime type.
@@ -151,9 +150,13 @@ public final class VideoFormatSelectorUtil {
       return false;
     }
     if (format.width > 0 && format.height > 0) {
-      // TODO: Use MediaCodecUtil.isSizeAndRateSupportedV21 on API levels >= 21 if we know the
-      // mimeType of the media samples within the container. Remove the assumption that we're
-      // dealing with H.264.
+      String videoMediaMimeType = MimeTypes.getVideoMediaMimeType(format.codecs);
+      if (Util.SDK_INT >= 21 && !MimeTypes.VIDEO_UNKNOWN.equals(videoMediaMimeType)) {
+        float frameRate = (format.frameRate > 0) ? format.frameRate : 30.0f;
+        return MediaCodecUtil.isSizeAndRateSupportedV21(videoMediaMimeType, false,
+            format.width, format.height, frameRate);
+      }
+      //Assuming that the media is H.264
       if (format.width * format.height > maxDecodableFrameSize) {
         // Filtering stream that device cannot play
         return false;
@@ -182,6 +185,19 @@ public final class VideoFormatSelectorUtil {
       // Vertical letter-boxing along edges.
       return new Point(Util.ceilDivide(viewportHeight * videoWidth, videoHeight), viewportHeight);
     }
+  }
+
+  private static Point getViewportSize(Context context) {
+    // Before API 23 the platform Display object does not provide a way to identify Android TVs that
+    // can show 4k resolution in a SurfaceView, so check for supported devices here.
+    // See also https://developer.sony.com/develop/tvs/android-tv/design-guide/.
+    if (Util.MODEL != null && Util.MODEL.startsWith("BRAVIA")
+        && context.getPackageManager().hasSystemFeature("com.sony.dtv.hardware.panel.qfhd")) {
+      return new Point(3840, 2160);
+    }
+
+    WindowManager windowManager = (WindowManager) context.getSystemService(Context.WINDOW_SERVICE);
+    return getDisplaySize(windowManager.getDefaultDisplay());
   }
 
   private static Point getDisplaySize(Display display) {

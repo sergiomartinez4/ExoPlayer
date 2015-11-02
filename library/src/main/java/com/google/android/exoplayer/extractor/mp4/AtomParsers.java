@@ -22,6 +22,7 @@ import com.google.android.exoplayer.util.Assertions;
 import com.google.android.exoplayer.util.CodecSpecificDataUtil;
 import com.google.android.exoplayer.util.MimeTypes;
 import com.google.android.exoplayer.util.NalUnitUtil;
+import com.google.android.exoplayer.util.ParsableBitArray;
 import com.google.android.exoplayer.util.ParsableByteArray;
 import com.google.android.exoplayer.util.Util;
 
@@ -31,7 +32,9 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
-/** Utility methods for parsing MP4 format atom payloads according to ISO 14496-12. */
+/**
+ * Utility methods for parsing MP4 format atom payloads according to ISO 14496-12.
+ */
 /* package */ final class AtomParsers {
 
   /**
@@ -44,14 +47,13 @@ import java.util.List;
   public static Track parseTrak(Atom.ContainerAtom trak, Atom.LeafAtom mvhd) {
     Atom.ContainerAtom mdia = trak.getContainerAtomOfType(Atom.TYPE_mdia);
     int trackType = parseHdlr(mdia.getLeafAtomOfType(Atom.TYPE_hdlr).data);
-    if (trackType != Track.TYPE_AUDIO && trackType != Track.TYPE_VIDEO
-        && trackType != Track.TYPE_TEXT && trackType != Track.TYPE_SUBTITLE) {
+    if (trackType != Track.TYPE_soun && trackType != Track.TYPE_vide && trackType != Track.TYPE_text
+        && trackType != Track.TYPE_sbtl && trackType != Track.TYPE_subt) {
       return null;
     }
 
-    Pair<Integer, Long> header = parseTkhd(trak.getLeafAtomOfType(Atom.TYPE_tkhd).data);
-    int id = header.first;
-    long duration = header.second;
+    TkhdData tkhdData = parseTkhd(trak.getLeafAtomOfType(Atom.TYPE_tkhd).data);
+    long duration = tkhdData.duration;
     long movieTimescale = parseMvhd(mvhd.data);
     long durationUs;
     if (duration == -1) {
@@ -62,11 +64,14 @@ import java.util.List;
     Atom.ContainerAtom stbl = mdia.getContainerAtomOfType(Atom.TYPE_minf)
         .getContainerAtomOfType(Atom.TYPE_stbl);
 
-    long mediaTimescale = parseMdhd(mdia.getLeafAtomOfType(Atom.TYPE_mdhd).data);
-    StsdDataHolder stsdData = parseStsd(stbl.getLeafAtomOfType(Atom.TYPE_stsd).data, durationUs);
+    Pair<Long, String> mdhdData = parseMdhd(mdia.getLeafAtomOfType(Atom.TYPE_mdhd).data);
+    StsdData stsdData = parseStsd(stbl.getLeafAtomOfType(Atom.TYPE_stsd).data, tkhdData.id,
+        durationUs, tkhdData.rotationDegrees, mdhdData.second);
+    Pair<long[], long[]> edtsData = parseEdts(trak.getContainerAtomOfType(Atom.TYPE_edts));
     return stsdData.mediaFormat == null ? null
-        : new Track(id, trackType, mediaTimescale, durationUs, stsdData.mediaFormat,
-            stsdData.trackEncryptionBoxes, stsdData.nalUnitLengthFieldLength);
+        : new Track(tkhdData.id, trackType, mdhdData.first, movieTimescale, durationUs,
+            stsdData.mediaFormat, stsdData.trackEncryptionBoxes, stsdData.nalUnitLengthFieldLength,
+            edtsData.first, edtsData.second);
   }
 
   /**
@@ -105,10 +110,11 @@ import java.util.List;
 
     long[] offsets = new long[sampleCount];
     int[] sizes = new int[sampleCount];
+    int maximumSize = 0;
     long[] timestamps = new long[sampleCount];
     int[] flags = new int[sampleCount];
     if (sampleCount == 0) {
-      return new TrackSampleTable(offsets, sizes, timestamps, flags);
+      return new TrackSampleTable(offsets, sizes, maximumSize, timestamps, flags);
     }
 
     // Prepare to read chunk offsets.
@@ -171,6 +177,9 @@ import java.util.List;
     for (int i = 0; i < sampleCount; i++) {
       offsets[i] = offsetBytes;
       sizes[i] = fixedSampleSize == 0 ? stsz.readUnsignedIntToInt() : fixedSampleSize;
+      if (sizes[i] > maximumSize) {
+        maximumSize = sizes[i];
+      }
       timestamps[i] = timestampTimeUnits + timestampOffset;
 
       // All samples are synchronization samples if the stss is not present.
@@ -235,15 +244,78 @@ import java.util.List;
       }
     }
 
-    Util.scaleLargeTimestampsInPlace(timestamps, 1000000, track.timescale);
-
     // Check all the expected samples have been seen.
     Assertions.checkArgument(remainingSynchronizationSamples == 0);
     Assertions.checkArgument(remainingSamplesAtTimestampDelta == 0);
     Assertions.checkArgument(remainingSamplesInChunk == 0);
     Assertions.checkArgument(remainingTimestampDeltaChanges == 0);
     Assertions.checkArgument(remainingTimestampOffsetChanges == 0);
-    return new TrackSampleTable(offsets, sizes, timestamps, flags);
+
+    if (track.editListDurations == null) {
+      Util.scaleLargeTimestampsInPlace(timestamps, C.MICROS_PER_SECOND, track.timescale);
+      return new TrackSampleTable(offsets, sizes, maximumSize, timestamps, flags);
+    }
+
+    // See the BMFF spec (ISO 14496-12) subsection 8.6.6. Edit lists that truncate audio and
+    // require prerolling from a sync sample after reordering are not supported. This
+    // implementation handles simple discarding/delaying of samples. The extractor may place
+    // further restrictions on what edited streams are playable.
+
+    // Count the number of samples after applying edits.
+    int editedSampleCount = 0;
+    int nextSampleIndex = 0;
+    boolean copyMetadata = false;
+    for (int i = 0; i < track.editListDurations.length; i++) {
+      long mediaTime = track.editListMediaTimes[i];
+      if (mediaTime != -1) {
+        long duration = Util.scaleLargeTimestamp(track.editListDurations[i], track.timescale,
+            track.movieTimescale);
+        int startIndex = Util.binarySearchCeil(timestamps, mediaTime, true, true);
+        int endIndex = Util.binarySearchCeil(timestamps, mediaTime + duration, true, false);
+        editedSampleCount += endIndex - startIndex;
+        copyMetadata |= nextSampleIndex != startIndex;
+        nextSampleIndex = endIndex;
+      }
+    }
+    copyMetadata |= editedSampleCount != sampleCount;
+
+    // Calculate edited sample timestamps and update the corresponding metadata arrays.
+    long[] editedOffsets = copyMetadata ? new long[editedSampleCount] : offsets;
+    int[] editedSizes = copyMetadata ? new int[editedSampleCount] : sizes;
+    int editedMaximumSize = copyMetadata ? 0 : maximumSize;
+    int[] editedFlags = copyMetadata ? new int[editedSampleCount] : flags;
+    long[] editedTimestamps = new long[editedSampleCount];
+    long pts = 0;
+    int sampleIndex = 0;
+    for (int i = 0; i < track.editListDurations.length; i++) {
+      long mediaTime = track.editListMediaTimes[i];
+      long duration = track.editListDurations[i];
+      if (mediaTime != -1) {
+        long endMediaTime = mediaTime + Util.scaleLargeTimestamp(duration, track.timescale,
+            track.movieTimescale);
+        int startIndex = Util.binarySearchCeil(timestamps, mediaTime, true, true);
+        int endIndex = Util.binarySearchCeil(timestamps, endMediaTime, true, false);
+        if (copyMetadata) {
+          int count = endIndex - startIndex;
+          System.arraycopy(offsets, startIndex, editedOffsets, sampleIndex, count);
+          System.arraycopy(sizes, startIndex, editedSizes, sampleIndex, count);
+          System.arraycopy(flags, startIndex, editedFlags, sampleIndex, count);
+        }
+        for (int j = startIndex; j < endIndex; j++) {
+          long ptsUs = Util.scaleLargeTimestamp(pts, C.MICROS_PER_SECOND, track.movieTimescale);
+          long timeInSegmentUs = Util.scaleLargeTimestamp(timestamps[j] - mediaTime,
+              C.MICROS_PER_SECOND, track.timescale);
+          editedTimestamps[sampleIndex] = ptsUs + timeInSegmentUs;
+          if (copyMetadata && editedSizes[sampleIndex] > editedMaximumSize) {
+            editedMaximumSize = sizes[j];
+          }
+          sampleIndex++;
+        }
+      }
+      pts += duration;
+    }
+    return new TrackSampleTable(editedOffsets, editedSizes, editedMaximumSize, editedTimestamps,
+        editedFlags);
   }
 
   /**
@@ -266,19 +338,17 @@ import java.util.List;
   /**
    * Parses a tkhd atom (defined in 14496-12).
    *
-   * @return A {@link Pair} consisting of the track id and duration (in the timescale indicated in
-   *     the movie header box). The duration is set to -1 if the duration is unspecified.
+   * @return An object containing the parsed data.
    */
-  private static Pair<Integer, Long> parseTkhd(ParsableByteArray tkhd) {
+  private static TkhdData parseTkhd(ParsableByteArray tkhd) {
     tkhd.setPosition(Atom.HEADER_SIZE);
     int fullAtom = tkhd.readInt();
     int version = Atom.parseFullAtomVersion(fullAtom);
 
     tkhd.skipBytes(version == 0 ? 8 : 16);
-
     int trackId = tkhd.readInt();
-    tkhd.skipBytes(4);
 
+    tkhd.skipBytes(4);
     boolean durationUnknown = true;
     int durationPosition = tkhd.getPosition();
     int durationByteCount = version == 0 ? 4 : 8;
@@ -296,7 +366,27 @@ import java.util.List;
       duration = version == 0 ? tkhd.readUnsignedInt() : tkhd.readUnsignedLongToLong();
     }
 
-    return Pair.create(trackId, duration);
+    tkhd.skipBytes(16);
+    int a00 = tkhd.readInt();
+    int a01 = tkhd.readInt();
+    tkhd.skipBytes(4);
+    int a10 = tkhd.readInt();
+    int a11 = tkhd.readInt();
+
+    int rotationDegrees;
+    int fixedOne = 65536;
+    if (a00 == 0 && a01 == fixedOne && a10 == -fixedOne && a11 == 0) {
+      rotationDegrees = 90;
+    } else if (a00 == 0 && a01 == -fixedOne && a10 == fixedOne && a11 == 0) {
+      rotationDegrees = 270;
+    } else if (a00 == -fixedOne && a01 == 0 && a10 == 0 && a11 == -fixedOne) {
+      rotationDegrees = 180;
+    } else {
+      // Only 0, 90, 180 and 270 are supported. Treat anything else as 0.
+      rotationDegrees = 0;
+    }
+
+    return new TkhdData(trackId, duration, rotationDegrees);
   }
 
   /**
@@ -314,21 +404,38 @@ import java.util.List;
    * Parses an mdhd atom (defined in 14496-12).
    *
    * @param mdhd The mdhd atom to parse.
-   * @return The media timescale, defined as the number of time units that pass in one second.
+   * @return A pair consisting of the media timescale defined as the number of time units that pass
+   *     in one second, and the language code.
    */
-  private static long parseMdhd(ParsableByteArray mdhd) {
+  private static Pair<Long, String> parseMdhd(ParsableByteArray mdhd) {
     mdhd.setPosition(Atom.HEADER_SIZE);
     int fullAtom = mdhd.readInt();
     int version = Atom.parseFullAtomVersion(fullAtom);
-
     mdhd.skipBytes(version == 0 ? 8 : 16);
-    return mdhd.readUnsignedInt();
+    long timescale = mdhd.readUnsignedInt();
+    mdhd.skipBytes(version == 0 ? 4 : 8);
+    int languageCode = mdhd.readUnsignedShort();
+    String language = "" + (char) (((languageCode >> 10) & 0x1F) + 0x60)
+        + (char) (((languageCode >> 5) & 0x1F) + 0x60)
+        + (char) (((languageCode) & 0x1F) + 0x60);
+    return Pair.create(timescale, language);
   }
 
-  private static StsdDataHolder parseStsd(ParsableByteArray stsd, long durationUs) {
+  /**
+   * Parses a stsd atom (defined in 14496-12).
+   *
+   * @param stsd The stsd atom to parse.
+   * @param trackId The track's identifier in its container.
+   * @param durationUs The duration of the track in microseconds.
+   * @param rotationDegrees The rotation of the track in degrees.
+   * @param language The language of the track.
+   * @return An object containing the parsed data.
+   */
+  private static StsdData parseStsd(ParsableByteArray stsd, int trackId, long durationUs,
+      int rotationDegrees, String language) {
     stsd.setPosition(Atom.FULL_HEADER_SIZE);
     int numberOfEntries = stsd.readInt();
-    StsdDataHolder holder = new StsdDataHolder(numberOfEntries);
+    StsdData out = new StsdData(numberOfEntries);
     for (int i = 0; i < numberOfEntries; i++) {
       int childStartPosition = stsd.getPosition();
       int childAtomSize = stsd.readInt();
@@ -338,28 +445,38 @@ import java.util.List;
           || childAtomType == Atom.TYPE_encv || childAtomType == Atom.TYPE_mp4v
           || childAtomType == Atom.TYPE_hvc1 || childAtomType == Atom.TYPE_hev1
           || childAtomType == Atom.TYPE_s263) {
-        parseVideoSampleEntry(stsd, childStartPosition, childAtomSize, durationUs, holder, i);
+        parseVideoSampleEntry(stsd, childStartPosition, childAtomSize, trackId, durationUs,
+            rotationDegrees, out, i);
       } else if (childAtomType == Atom.TYPE_mp4a || childAtomType == Atom.TYPE_enca
-          || childAtomType == Atom.TYPE_ac_3) {
-        parseAudioSampleEntry(stsd, childAtomType, childStartPosition, childAtomSize, durationUs,
-            holder, i);
+          || childAtomType == Atom.TYPE_ac_3 || childAtomType == Atom.TYPE_ec_3
+          || childAtomType == Atom.TYPE_dtsc || childAtomType == Atom.TYPE_dtse
+          || childAtomType == Atom.TYPE_dtsh || childAtomType == Atom.TYPE_dtsl) {
+        parseAudioSampleEntry(stsd, childAtomType, childStartPosition, childAtomSize, trackId,
+            durationUs, language, out, i);
       } else if (childAtomType == Atom.TYPE_TTML) {
-        holder.mediaFormat = MediaFormat.createTextFormat(MimeTypes.APPLICATION_TTML, durationUs);
+        out.mediaFormat = MediaFormat.createTextFormat(Integer.toString(trackId),
+            MimeTypes.APPLICATION_TTML, MediaFormat.NO_VALUE, durationUs, language);
       } else if (childAtomType == Atom.TYPE_tx3g) {
-        holder.mediaFormat = MediaFormat.createTextFormat(MimeTypes.APPLICATION_TX3G, durationUs);
+        out.mediaFormat = MediaFormat.createTextFormat(Integer.toString(trackId),
+            MimeTypes.APPLICATION_TX3G, MediaFormat.NO_VALUE, durationUs, language);
+      } else if (childAtomType == Atom.TYPE_stpp) {
+        out.mediaFormat = MediaFormat.createTextFormat(Integer.toString(trackId),
+            MimeTypes.APPLICATION_TTML, MediaFormat.NO_VALUE, durationUs, language,
+            0 /* subsample timing is absolute */);
       }
       stsd.setPosition(childStartPosition + childAtomSize);
     }
-    return holder;
+    return out;
   }
 
   private static void parseVideoSampleEntry(ParsableByteArray parent, int position, int size,
-      long durationUs, StsdDataHolder out, int entryIndex) {
+      int trackId, long durationUs, int rotationDegrees, StsdData out, int entryIndex) {
     parent.setPosition(position + Atom.HEADER_SIZE);
 
     parent.skipBytes(24);
     int width = parent.readUnsignedShort();
     int height = parent.readUnsignedShort();
+    boolean pixelWidthHeightRatioFromPasp = false;
     float pixelWidthHeightRatio = 1;
     parent.skipBytes(50);
 
@@ -379,9 +496,12 @@ import java.util.List;
       if (childAtomType == Atom.TYPE_avcC) {
         Assertions.checkState(mimeType == null);
         mimeType = MimeTypes.VIDEO_H264;
-        Pair<List<byte[]>, Integer> avcCData = parseAvcCFromParent(parent, childStartPosition);
-        initializationData = avcCData.first;
-        out.nalUnitLengthFieldLength = avcCData.second;
+        AvcCData avcCData = parseAvcCFromParent(parent, childStartPosition);
+        initializationData = avcCData.initializationData;
+        out.nalUnitLengthFieldLength = avcCData.nalUnitLengthFieldLength;
+        if (!pixelWidthHeightRatioFromPasp) {
+          pixelWidthHeightRatio = avcCData.pixelWidthAspectRatio;
+        }
       } else if (childAtomType == Atom.TYPE_hvcC) {
         Assertions.checkState(mimeType == null);
         mimeType = MimeTypes.VIDEO_H265;
@@ -402,6 +522,7 @@ import java.util.List;
             parseSinfFromParent(parent, childStartPosition, childAtomSize);
       } else if (childAtomType == Atom.TYPE_pasp) {
         pixelWidthHeightRatio = parsePaspFromParent(parent, childStartPosition);
+        pixelWidthHeightRatioFromPasp = true;
       }
       childPosition += childAtomSize;
     }
@@ -411,12 +532,12 @@ import java.util.List;
       return;
     }
 
-    out.mediaFormat = MediaFormat.createVideoFormat(mimeType, MediaFormat.NO_VALUE, durationUs,
-        width, height, pixelWidthHeightRatio, initializationData);
+    out.mediaFormat = MediaFormat.createVideoFormat(Integer.toString(trackId), mimeType,
+        MediaFormat.NO_VALUE, MediaFormat.NO_VALUE, durationUs, width, height, initializationData,
+        rotationDegrees, pixelWidthHeightRatio);
   }
 
-  private static Pair<List<byte[]>, Integer> parseAvcCFromParent(ParsableByteArray parent,
-      int position) {
+  private static AvcCData parseAvcCFromParent(ParsableByteArray parent, int position) {
     parent.setPosition(position + Atom.HEADER_SIZE + 4);
     // Start of the AVCDecoderConfigurationRecord (defined in 14496-15)
     int nalUnitLengthFieldLength = (parent.readUnsignedByte() & 0x3) + 1;
@@ -424,8 +545,7 @@ import java.util.List;
       throw new IllegalStateException();
     }
     List<byte[]> initializationData = new ArrayList<>();
-    // TODO: We should try and parse these using CodecSpecificDataUtil.parseSpsNalUnit, and
-    // expose the AVC profile and level somewhere useful; Most likely in MediaFormat.
+    float pixelWidthAspectRatio = 1;
     int numSequenceParameterSets = parent.readUnsignedByte() & 0x1F;
     for (int j = 0; j < numSequenceParameterSets; j++) {
       initializationData.add(NalUnitUtil.parseChildNalUnit(parent));
@@ -434,7 +554,17 @@ import java.util.List;
     for (int j = 0; j < numPictureParameterSets; j++) {
       initializationData.add(NalUnitUtil.parseChildNalUnit(parent));
     }
-    return Pair.create(initializationData, nalUnitLengthFieldLength);
+
+    if (numSequenceParameterSets > 0) {
+      // Parse the first sequence parameter set to obtain pixelWidthAspectRatio.
+      ParsableBitArray spsDataBitArray = new ParsableBitArray(initializationData.get(0));
+      // Skip the NAL header consisting of the nalUnitLengthField and the type (1 byte).
+      spsDataBitArray.setPosition(8 * (nalUnitLengthFieldLength + 1));
+      pixelWidthAspectRatio = CodecSpecificDataUtil.parseSpsNalUnit(spsDataBitArray)
+          .pixelWidthAspectRatio;
+    }
+
+    return new AvcCData(initializationData, nalUnitLengthFieldLength, pixelWidthAspectRatio);
   }
 
   private static Pair<List<byte[]>, Integer> parseHvcCFromParent(ParsableByteArray parent,
@@ -477,6 +607,39 @@ import java.util.List;
 
     List<byte[]> initializationData = csdLength == 0 ? null : Collections.singletonList(buffer);
     return Pair.create(initializationData, lengthSizeMinusOne + 1);
+  }
+
+  /**
+   * Parses the edts atom (defined in 14496-12 subsection 8.6.5).
+   *
+   * @param edtsAtom edts (edit box) atom to parse.
+   * @return Pair of edit list durations and edit list media times, or a pair of nulls if they are
+   *     not present.
+   */
+  private static Pair<long[], long[]> parseEdts(Atom.ContainerAtom edtsAtom) {
+    Atom.LeafAtom elst;
+    if (edtsAtom == null || (elst = edtsAtom.getLeafAtomOfType(Atom.TYPE_elst)) == null) {
+      return Pair.create(null, null);
+    }
+    ParsableByteArray elstData = elst.data;
+    elstData.setPosition(Atom.HEADER_SIZE);
+    int fullAtom = elstData.readInt();
+    int version = Atom.parseFullAtomVersion(fullAtom);
+    int entryCount = elstData.readUnsignedIntToInt();
+    long[] editListDurations = new long[entryCount];
+    long[] editListMediaTimes = new long[entryCount];
+    for (int i = 0; i < entryCount; i++) {
+      editListDurations[i] =
+          version == 1 ? elstData.readUnsignedLongToLong() : elstData.readUnsignedInt();
+      editListMediaTimes[i] = version == 1 ? elstData.readLong() : elstData.readInt();
+      int mediaRateInteger = elstData.readShort();
+      if (mediaRateInteger != 1) {
+        // The extractor does not handle dwell edits (mediaRateInteger == 0).
+        throw new IllegalArgumentException("Unsupported media rate.");
+      }
+      elstData.skipBytes(2);
+    }
+    return Pair.create(editListDurations, editListMediaTimes);
   }
 
   private static TrackEncryptionBox parseSinfFromParent(ParsableByteArray parent, int position,
@@ -532,7 +695,7 @@ import java.util.List;
   }
 
   private static void parseAudioSampleEntry(ParsableByteArray parent, int atomType, int position,
-      int size, long durationUs, StsdDataHolder out, int entryIndex) {
+      int size, int trackId, long durationUs, String language, StsdData out, int entryIndex) {
     parent.setPosition(position + Atom.HEADER_SIZE);
     parent.skipBytes(16);
     int channelCount = parent.readUnsignedShort();
@@ -546,6 +709,10 @@ import java.util.List;
       mimeType = MimeTypes.AUDIO_AC3;
     } else if (atomType == Atom.TYPE_ec_3) {
       mimeType = MimeTypes.AUDIO_EC3;
+    } else if (atomType == Atom.TYPE_dtsc || atomType == Atom.TYPE_dtse) {
+      mimeType = MimeTypes.AUDIO_DTS;
+    } else if (atomType == Atom.TYPE_dtsh || atomType == Atom.TYPE_dtsl) {
+      mimeType = MimeTypes.AUDIO_DTS_HD;
     }
 
     byte[] initializationData = null;
@@ -578,11 +745,20 @@ import java.util.List;
         // TODO: Choose the right AC-3 track based on the contents of dac3/dec3.
         // TODO: Add support for encryption (by setting out.trackEncryptionBoxes).
         parent.setPosition(Atom.HEADER_SIZE + childStartPosition);
-        out.mediaFormat = Ac3Util.parseAnnexFAc3Format(parent);
+        out.mediaFormat = Ac3Util.parseAnnexFAc3Format(parent, Integer.toString(trackId),
+            durationUs, language);
         return;
-      } else if  (atomType == Atom.TYPE_ec_3 && childAtomType == Atom.TYPE_dec3) {
+      } else if (atomType == Atom.TYPE_ec_3 && childAtomType == Atom.TYPE_dec3) {
         parent.setPosition(Atom.HEADER_SIZE + childStartPosition);
-        out.mediaFormat = Ac3Util.parseAnnexFEAc3Format(parent);
+        out.mediaFormat = Ac3Util.parseAnnexFEAc3Format(parent, Integer.toString(trackId),
+            durationUs, language);
+        return;
+      } else if ((atomType == Atom.TYPE_dtsc || atomType == Atom.TYPE_dtse
+          || atomType == Atom.TYPE_dtsh || atomType == Atom.TYPE_dtsl)
+          && childAtomType == Atom.TYPE_ddts) {
+        out.mediaFormat = MediaFormat.createAudioFormat(Integer.toString(trackId), mimeType,
+            MediaFormat.NO_VALUE, MediaFormat.NO_VALUE, durationUs, channelCount, sampleRate, null,
+            language);
         return;
       }
       childPosition += childAtomSize;
@@ -593,9 +769,10 @@ import java.util.List;
       return;
     }
 
-    out.mediaFormat = MediaFormat.createAudioFormat(mimeType, sampleSize, durationUs, channelCount,
-        sampleRate,
-        initializationData == null ? null : Collections.singletonList(initializationData));
+    out.mediaFormat = MediaFormat.createAudioFormat(Integer.toString(trackId), mimeType,
+        MediaFormat.NO_VALUE, sampleSize, durationUs, channelCount, sampleRate,
+        initializationData == null ? null : Collections.singletonList(initializationData),
+        language);
   }
 
   /** Returns codec-specific initialization data contained in an esds box. */
@@ -633,7 +810,6 @@ import java.util.List;
     switch (objectTypeIndication) {
       case 0x6B:
         mimeType = MimeTypes.AUDIO_MPEG;
-        // Don't extract codec-specific data for MPEG audio tracks, as it is not needed.
         return Pair.create(mimeType, null);
       case 0x20:
         mimeType = MimeTypes.VIDEO_MP4V;
@@ -645,6 +821,9 @@ import java.util.List;
         mimeType = MimeTypes.VIDEO_H265;
         break;
       case 0x40:
+      case 0x66:
+      case 0x67:
+      case 0x68:
         mimeType = MimeTypes.AUDIO_AAC;
         break;
       case 0xA5:
@@ -653,6 +832,14 @@ import java.util.List;
       case 0xA6:
         mimeType = MimeTypes.AUDIO_EC3;
         break;
+      case 0xA9:
+      case 0xAC:
+        mimeType = MimeTypes.AUDIO_DTS;
+        return Pair.create(mimeType, null);
+      case 0xAA:
+      case 0xAB:
+        mimeType = MimeTypes.AUDIO_DTS_HD;
+        return Pair.create(mimeType, null);
       default:
         mimeType = null;
         break;
@@ -679,18 +866,53 @@ import java.util.List;
   }
 
   /**
+   * Holds data parsed from a tkhd atom.
+   */
+  private static final class TkhdData {
+
+    private final int id;
+    private final long duration;
+    private final int rotationDegrees;
+
+    public TkhdData(int id, long duration, int rotationDegrees) {
+      this.id = id;
+      this.duration = duration;
+      this.rotationDegrees = rotationDegrees;
+    }
+
+  }
+
+  /**
    * Holds data parsed from an stsd atom and its children.
    */
-  private static final class StsdDataHolder {
+  private static final class StsdData {
 
     public final TrackEncryptionBox[] trackEncryptionBoxes;
 
     public MediaFormat mediaFormat;
     public int nalUnitLengthFieldLength;
 
-    public StsdDataHolder(int numberOfEntries) {
+    public StsdData(int numberOfEntries) {
       trackEncryptionBoxes = new TrackEncryptionBox[numberOfEntries];
       nalUnitLengthFieldLength = -1;
+    }
+
+  }
+
+  /**
+   * Holds data parsed from an AvcC atom.
+   */
+  private static final class AvcCData {
+
+    public final List<byte[]> initializationData;
+    public final int nalUnitLengthFieldLength;
+    public final float pixelWidthAspectRatio;
+
+    public AvcCData(List<byte[]> initializationData, int nalUnitLengthFieldLength,
+        float pixelWidthAspectRatio) {
+      this.initializationData = initializationData;
+      this.nalUnitLengthFieldLength = nalUnitLengthFieldLength;
+      this.pixelWidthAspectRatio = pixelWidthAspectRatio;
     }
 
   }
