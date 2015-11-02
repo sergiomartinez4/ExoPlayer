@@ -30,7 +30,7 @@ public final class TrackInfo {
    * {@link C#MATCH_LONGEST_US} if the duration should match the duration of the longest track whose
    * duration is known.
    */
-  public long durationUs;
+  public final long durationUs;
 
   /**
    * @param mimeType The mime type.

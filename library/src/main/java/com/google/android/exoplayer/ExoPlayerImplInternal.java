@@ -333,32 +333,6 @@ import java.util.List;
     handler.sendEmptyMessage(MSG_DO_SOME_WORK);
   }
 
-  private void updateDurationUs() {
-      long durationUs = 0;
-      for (int i = 0; i < renderers.length; i++) {
-          TrackRenderer renderer = renderers[i];
-          if (rendererEnabledFlags[i]
-              && renderer.getState() != TrackRenderer.STATE_IGNORE
-              && renderer.getState() != TrackRenderer.STATE_UNPREPARED
-              && renderer.getState() != TrackRenderer.STATE_RELEASED ) {
-              if (durationUs == TrackRenderer.UNKNOWN_TIME_US) {
-                  // We've already encountered a track for which the duration is unknown, so the media
-                  // duration is unknown regardless of the duration of this track.
-              } else {
-                  long trackDurationUs = renderer.getDurationUs();
-                  if (trackDurationUs == TrackRenderer.UNKNOWN_TIME_US) {
-                      durationUs = TrackRenderer.UNKNOWN_TIME_US;
-                  } else if (trackDurationUs == TrackRenderer.MATCH_LONGEST_US) {
-                      // Do nothing.
-                  } else {
-                      durationUs = Math.max(durationUs, trackDurationUs);
-                  }
-              }
-          }
-      }
-      this.durationUs = durationUs;
-  }
-
   private boolean rendererReadyOrEnded(TrackRenderer renderer) {
     if (renderer.isEnded()) {
       return true;
@@ -434,9 +408,7 @@ import java.util.List;
         : Long.MAX_VALUE;
     boolean allRenderersEnded = true;
     boolean allRenderersReadyOrEnded = true;
-    updateDurationUs();
     updatePositionUs();
-
     for (int i = 0; i < enabledRenderers.size(); i++) {
       TrackRenderer renderer = enabledRenderers.get(i);
       // TODO: Each renderer should return the maximum delay before which it wishes to be
@@ -471,7 +443,6 @@ import java.util.List;
         }
       }
     }
-
     this.bufferedPositionUs = bufferedPositionUs;
 
     if (allRenderersEnded
