@@ -325,7 +325,7 @@ public class HlsChunkSource {
     boolean liveDiscontinuity = false;
     if (live) {
       if (previousTsChunk == null) {
-        if (seekPositionUs == 0) {
+        if (seekPositionUs == 0 || seekPositionUs > getLiveEdgeUs(nextVariantIndex)) {
           chunkMediaSequence = getLiveStartChunkMediaSequence(nextVariantIndex);
         } else {
           chunkMediaSequence = Util.binarySearchFloor(mediaPlaylist.segments, seekPositionUs, true,
@@ -574,11 +574,21 @@ public class HlsChunkSource {
     return timeSinceLastMediaPlaylistLoadMs >= (mediaPlaylist.targetDurationSecs * 1000) / 2;
   }
 
+  private long getLiveEdgeUs(int variantIndex) {
+    HlsMediaPlaylist mediaPlaylist = variantPlaylists[variantIndex];
+    int size = mediaPlaylist.segments.size();
+    return size > 3 ? mediaPlaylist.segments.get(size - 3).startTimeUs : 0;
+  }
+
+  private int getLiveEdgeIndex(int variantIndex) {
+    HlsMediaPlaylist mediaPlaylist = variantPlaylists[variantIndex];
+    return mediaPlaylist.segments.size() > 3 ? mediaPlaylist.segments.size() - 3 : 0;
+  }
+
   private int getLiveStartChunkMediaSequence(int variantIndex) {
     // For live start playback from the third chunk from the end.
-    HlsMediaPlaylist mediaPlaylist = variantPlaylists[variantIndex];
-    int chunkIndex = mediaPlaylist.segments.size() > 3 ? mediaPlaylist.segments.size() - 3 : 0;
-    return chunkIndex + mediaPlaylist.mediaSequence;
+    int chunkIndex = getLiveEdgeIndex(variantIndex);
+    return chunkIndex + variantPlaylists[variantIndex].mediaSequence;
   }
 
   private MediaPlaylistChunk newMediaPlaylistChunk(int variantIndex) {
@@ -626,7 +636,8 @@ public class HlsChunkSource {
     variantPlaylists[variantIndex] = mediaPlaylist;
     live |= mediaPlaylist.live;
     durationUs = live ? C.UNKNOWN_TIME_US : mediaPlaylist.durationUs;
-    TimeRange newAvailableRange = new TimeRange.StaticTimeRange(0, mediaPlaylist.durationUs);
+    long seekMax = live ? getLiveEdgeUs(variantIndex) : mediaPlaylist.durationUs;
+    TimeRange newAvailableRange = new TimeRange.StaticTimeRange(0, seekMax);
     if (availableRange == null || !availableRange.equals(newAvailableRange)) {
       availableRange = newAvailableRange;
       notifyAvailableRangeChanged(availableRange);
