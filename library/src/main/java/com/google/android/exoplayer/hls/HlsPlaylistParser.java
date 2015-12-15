@@ -105,7 +105,7 @@ public final class HlsPlaylistParser implements UriLoadable.Parser<HlsPlaylist> 
   // private static final Pattern DEFAULT_ATTR_REGEX =
   //     HlsParserUtil.compileBooleanAttrPattern(DEFAULT_ATTR);
 
-  private Map<Integer, Long> segementMediaSequenceToStartTimeMap = new HashMap<Integer, Long>();
+  private Map<Integer, Long> segmentMediaSequenceToStartTimeMap = new HashMap<Integer, Long>();
 
   @Override
   public HlsPlaylist parse(String connectionUrl, InputStream inputStream)
@@ -131,7 +131,7 @@ public final class HlsPlaylistParser implements UriLoadable.Parser<HlsPlaylist> 
             || line.equals(ENDLIST_TAG)) {
           extraLines.add(line);
           return parseMediaPlaylist(new LineIterator(extraLines, reader), connectionUrl,
-            segementMediaSequenceToStartTimeMap);
+            segmentMediaSequenceToStartTimeMap);
         } else {
           extraLines.add(line);
         }
@@ -211,7 +211,7 @@ public final class HlsPlaylistParser implements UriLoadable.Parser<HlsPlaylist> 
   }
 
   private static HlsMediaPlaylist parseMediaPlaylist(LineIterator iterator, String baseUri,
-      Map<Integer, Long> segementMediaSequenceToStartTimeMap)
+      Map<Integer, Long> segmentMediaSequenceToStartTimeMap)
       throws IOException {
     int mediaSequence = 0;
     int targetDurationSecs = 0;
@@ -278,10 +278,10 @@ public final class HlsPlaylistParser implements UriLoadable.Parser<HlsPlaylist> 
         if (segmentByterangeLength == C.LENGTH_UNBOUNDED) {
           segmentByterangeOffset = 0;
         }
-        if (segementMediaSequenceToStartTimeMap.containsKey(segmentMediaSequence)) {
-            segmentStartTimeUs = segementMediaSequenceToStartTimeMap.get(segmentMediaSequence);
+        if (segmentMediaSequenceToStartTimeMap.containsKey(segmentMediaSequence)) {
+            segmentStartTimeUs = segmentMediaSequenceToStartTimeMap.get(segmentMediaSequence);
         } else {
-            segementMediaSequenceToStartTimeMap.put(segmentMediaSequence, segmentStartTimeUs);
+            segmentMediaSequenceToStartTimeMap.put(segmentMediaSequence, segmentStartTimeUs);
         }
         segments.add(new Segment(line, segmentDurationSecs, discontinuitySequenceNumber,
             segmentStartTimeUs, isEncrypted, encryptionKeyUri, segmentEncryptionIV,
