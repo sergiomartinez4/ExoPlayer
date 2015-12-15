@@ -228,7 +228,7 @@ public class HlsChunkSource {
     playlistParser = new HlsPlaylistParser();
 
     if (playlist.type == HlsPlaylist.TYPE_MEDIA) {
-      Format format = new Format("0", MimeTypes.APPLICATION_M3U8, -1, -1, -1, -1, -1, -1, null,
+      Format format = new Format("0", playlistUrl, MimeTypes.APPLICATION_M3U8, -1, -1, -1, -1, -1, -1, null,
           null);
       variants = new Variant[] {new Variant(playlistUrl, format)};
       variantPlaylists = new HlsMediaPlaylist[1];
@@ -329,10 +329,10 @@ public class HlsChunkSource {
     boolean liveDiscontinuity = false;
     if (live) {
       if (previousTsChunk == null) {
-        if (seekPositionUs == 0 || seekPositionUs > getLiveEdgeUs(nextVariantIndex)) {
+        if (playbackPositionUs == 0 || playbackPositionUs > getLiveEdgeUs(nextVariantIndex)) {
           chunkMediaSequence = getLiveStartChunkMediaSequence(nextVariantIndex);
         } else {
-          chunkMediaSequence = Util.binarySearchFloor(mediaPlaylist.segments, seekPositionUs, true,
+          chunkMediaSequence = Util.binarySearchFloor(mediaPlaylist.segments, playbackPositionUs, true,
             true) + mediaPlaylist.mediaSequence;
         }
       } else {
@@ -637,7 +637,7 @@ public class HlsChunkSource {
     live |= mediaPlaylist.live;
     durationUs = live ? C.UNKNOWN_TIME_US : mediaPlaylist.durationUs;
     long seekMax = live ? getLiveEdgeUs(variantIndex) : mediaPlaylist.durationUs;
-    TimeRange newAvailableRange = new TimeRange.StaticTimeRange(0, seekMax);
+    TimeRange newAvailableRange = new TimeRange.StaticTimeRange(mediaPlaylist.segments.get(0).startTimeUs, seekMax);
     if (availableRange == null || !availableRange.equals(newAvailableRange)) {
       availableRange = newAvailableRange;
       notifyAvailableRangeChanged(availableRange);

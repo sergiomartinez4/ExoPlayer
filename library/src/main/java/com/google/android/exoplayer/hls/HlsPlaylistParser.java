@@ -28,8 +28,10 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Map;
 import java.util.Queue;
 import java.util.regex.Pattern;
 
@@ -103,6 +105,8 @@ public final class HlsPlaylistParser implements UriLoadable.Parser<HlsPlaylist> 
   // private static final Pattern DEFAULT_ATTR_REGEX =
   //     HlsParserUtil.compileBooleanAttrPattern(DEFAULT_ATTR);
 
+  private Map<Integer, Long> segementMediaSequenceToStartTimeMap = new HashMap<Integer, Long>();
+
   @Override
   public HlsPlaylist parse(String connectionUrl, InputStream inputStream)
       throws IOException, ParserException {
@@ -126,7 +130,8 @@ public final class HlsPlaylistParser implements UriLoadable.Parser<HlsPlaylist> 
             || line.equals(DISCONTINUITY_SEQUENCE_TAG)
             || line.equals(ENDLIST_TAG)) {
           extraLines.add(line);
-          return parseMediaPlaylist(new LineIterator(extraLines, reader), connectionUrl);
+          return parseMediaPlaylist(new LineIterator(extraLines, reader), connectionUrl,
+            segementMediaSequenceToStartTimeMap);
         } else {
           extraLines.add(line);
         }
@@ -158,7 +163,7 @@ public final class HlsPlaylistParser implements UriLoadable.Parser<HlsPlaylist> 
           String subtitleName = HlsParserUtil.parseStringAttr(line, NAME_ATTR_REGEX, NAME_ATTR);
           String uri = HlsParserUtil.parseStringAttr(line, URI_ATTR_REGEX, URI_ATTR);
           String language = HlsParserUtil.parseOptionalStringAttr(line, LANGUAGE_ATTR_REGEX);
-          Format format = new Format(subtitleName, MimeTypes.TEXT_VTT, -1, -1, -1, -1, -1, -1,
+          Format format = new Format(subtitleName, uri, MimeTypes.TEXT_VTT, -1, -1, -1, -1, -1, -1,
               language, codecs);
           subtitles.add(new Variant(uri, format));
         } else {
@@ -191,7 +196,7 @@ public final class HlsPlaylistParser implements UriLoadable.Parser<HlsPlaylist> 
         if (name == null) {
           name = Integer.toString(variants.size());
         }
-        Format format = new Format(name, MimeTypes.APPLICATION_M3U8, width, height, -1, -1, -1,
+        Format format = new Format(name, line, MimeTypes.APPLICATION_M3U8, width, height, -1, -1, -1,
             bitrate, null, codecs);
         variants.add(new Variant(line, format));
         bitrate = 0;
@@ -205,7 +210,8 @@ public final class HlsPlaylistParser implements UriLoadable.Parser<HlsPlaylist> 
     return new HlsMasterPlaylist(baseUri, variants, subtitles);
   }
 
-  private static HlsMediaPlaylist parseMediaPlaylist(LineIterator iterator, String baseUri)
+  private static HlsMediaPlaylist parseMediaPlaylist(LineIterator iterator, String baseUri,
+      Map<Integer, Long> segementMediaSequenceToStartTimeMap)
       throws IOException {
     int mediaSequence = 0;
     int targetDurationSecs = 0;
@@ -271,6 +277,11 @@ public final class HlsPlaylistParser implements UriLoadable.Parser<HlsPlaylist> 
         segmentMediaSequence++;
         if (segmentByterangeLength == C.LENGTH_UNBOUNDED) {
           segmentByterangeOffset = 0;
+        }
+        if (segementMediaSequenceToStartTimeMap.containsKey(segmentMediaSequence)) {
+            segmentStartTimeUs = segementMediaSequenceToStartTimeMap.get(segmentMediaSequence);
+        } else {
+            segementMediaSequenceToStartTimeMap.put(segmentMediaSequence, segmentStartTimeUs);
         }
         segments.add(new Segment(line, segmentDurationSecs, discontinuitySequenceNumber,
             segmentStartTimeUs, isEncrypted, encryptionKeyUri, segmentEncryptionIV,
