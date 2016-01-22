@@ -1,5 +1,13 @@
 # Release notes #
 
+### r1.5.4 ###
+
+* HLS: Support for variant selection and WebVtt subtitles.
+* MP4: Support for embedded WebVtt.
+* Improved device compatibility.
+* Fix for resource leak (Issue #1066).
+* Misc bug fixes + minor features.
+
 ### r1.5.3 ###
 
 * Support for FLV (without seeking).
@@ -58,7 +66,6 @@
 * TTML: Improved handling of whitespace.
 * DASH: Support Mpd.Location element.
 * Add option to TsExtractor to allow non-IDR keyframes.
-* Added MulticastDataSource for connecting to multicast streams.
 * (WorkInProgress) - First steps to supporting seeking in DASH DVR window.
 * (WorkInProgress) - First steps to supporting styled + positioned subtitles.
 * Misc bug fixes.
