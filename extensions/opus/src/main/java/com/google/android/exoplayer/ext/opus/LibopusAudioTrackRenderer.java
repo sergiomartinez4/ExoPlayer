@@ -98,21 +98,21 @@ public final class LibopusAudioTrackRenderer extends SampleSourceTrackRenderer
   private int audioSessionId;
 
   /**
-   * @param source The upstream source from which the renderer obtains samples.
+   * @param sources The upstream sources from which the renderer obtains samples.
    */
-  public LibopusAudioTrackRenderer(SampleSource source) {
-    this(source, null, null);
+  public LibopusAudioTrackRenderer(SampleSource[] sources) {
+    this(sources, null, null);
   }
 
   /**
-   * @param source The upstream source from which the renderer obtains samples.
+   * @param sources The upstream sources from which the renderer obtains samples.
    * @param eventHandler A handler to use when delivering events to {@code eventListener}. May be
    *     null if delivery of events is not required.
    * @param eventListener A listener of events. May be null if delivery of events is not required.
    */
-  public LibopusAudioTrackRenderer(SampleSource source, Handler eventHandler,
+  public LibopusAudioTrackRenderer(SampleSource[] sources, Handler eventHandler,
       EventListener eventListener) {
-    super(source);
+    super(sources);
     this.eventHandler = eventHandler;
     this.eventListener = eventListener;
     this.audioSessionId = AudioTrack.SESSION_ID_NOT_SET;

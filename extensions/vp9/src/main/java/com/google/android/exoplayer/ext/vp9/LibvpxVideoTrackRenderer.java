@@ -124,16 +124,16 @@ public final class LibvpxVideoTrackRenderer extends SampleSourceTrackRenderer {
   private long droppedFrameAccumulationStartTimeMs;
 
   /**
-   * @param source The upstream source from which the renderer obtains samples.
+   * @param sources The upstream sources from which the renderer obtains samples.
    * @param scaleToFit Boolean that indicates if video frames should be scaled to fit when
    *     rendering.
    */
-  public LibvpxVideoTrackRenderer(SampleSource source, boolean scaleToFit) {
-    this(source, scaleToFit, null, null, 0);
+  public LibvpxVideoTrackRenderer(SampleSource[] sources, boolean scaleToFit) {
+    this(sources, scaleToFit, null, null, 0);
   }
 
   /**
-   * @param source The upstream source from which the renderer obtains samples.
+   * @param sources The upstream sources from which the renderer obtains samples.
    * @param scaleToFit Boolean that indicates if video frames should be scaled to fit when
    *     rendering.
    * @param eventHandler A handler to use when delivering events to {@code eventListener}. May be
@@ -142,9 +142,9 @@ public final class LibvpxVideoTrackRenderer extends SampleSourceTrackRenderer {
    * @param maxDroppedFrameCountToNotify The maximum number of frames that can be dropped between
    *     invocations of {@link EventListener#onDroppedFrames(int, long)}.
    */
-  public LibvpxVideoTrackRenderer(SampleSource source, boolean scaleToFit,
+  public LibvpxVideoTrackRenderer(SampleSource[] sources, boolean scaleToFit,
       Handler eventHandler, EventListener eventListener, int maxDroppedFrameCountToNotify) {
-    super(source);
+    super(sources);
     this.scaleToFit = scaleToFit;
     this.eventHandler = eventHandler;
     this.eventListener = eventListener;

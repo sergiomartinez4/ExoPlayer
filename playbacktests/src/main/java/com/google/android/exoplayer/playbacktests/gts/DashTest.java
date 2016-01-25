@@ -23,6 +23,7 @@ import com.google.android.exoplayer.MediaCodecAudioTrackRenderer;
 import com.google.android.exoplayer.MediaCodecSelector;
 import com.google.android.exoplayer.MediaCodecUtil;
 import com.google.android.exoplayer.MediaCodecVideoTrackRenderer;
+import com.google.android.exoplayer.SampleSource;
 import com.google.android.exoplayer.TrackRenderer;
 import com.google.android.exoplayer.chunk.ChunkSampleSource;
 import com.google.android.exoplayer.chunk.ChunkSource;
@@ -414,7 +415,7 @@ public final class DashTest extends ActivityInstrumentationTestCase2<HostActivit
           VIDEO_BUFFER_SEGMENTS * BUFFER_SEGMENT_SIZE, handler, logger, VIDEO_EVENT_ID,
           MIN_LOADABLE_RETRY_COUNT);
       MediaCodecVideoTrackRenderer videoRenderer = new MediaCodecVideoTrackRenderer(host,
-          videoSampleSource, MediaCodecSelector.DEFAULT, MediaCodec.VIDEO_SCALING_MODE_SCALE_TO_FIT,
+          new SampleSource[] {videoSampleSource}, MediaCodecSelector.DEFAULT, MediaCodec.VIDEO_SCALING_MODE_SCALE_TO_FIT,
           0, handler, logger, 50);
       videoCounters = videoRenderer.codecCounters;
       player.sendMessage(videoRenderer, MediaCodecVideoTrackRenderer.MSG_SET_SURFACE, surface);
@@ -429,7 +430,7 @@ public final class DashTest extends ActivityInstrumentationTestCase2<HostActivit
           AUDIO_BUFFER_SEGMENTS * BUFFER_SEGMENT_SIZE, handler, logger, AUDIO_EVENT_ID,
           MIN_LOADABLE_RETRY_COUNT);
       MediaCodecAudioTrackRenderer audioRenderer = new MediaCodecAudioTrackRenderer(
-          audioSampleSource, MediaCodecSelector.DEFAULT, handler, logger);
+          new SampleSource[] {audioSampleSource}, MediaCodecSelector.DEFAULT, handler, logger);
       audioCounters = audioRenderer.codecCounters;
 
       TrackRenderer[] renderers = new TrackRenderer[RENDERER_COUNT];
@@ -575,4 +576,3 @@ public final class DashTest extends ActivityInstrumentationTestCase2<HostActivit
   }
 
 }
-

@@ -230,7 +230,7 @@ public abstract class MediaCodecTrackRenderer extends SampleSourceTrackRenderer 
   private boolean waitingForFirstSyncFrame;
 
   /**
-   * @param source The upstream source from which the renderer obtains samples.
+   * @param sources The upstream sources from which the renderer obtains samples.
    * @param mediaCodecSelector A decoder selector.
    * @param drmSessionManager For use with encrypted media. May be null if support for encrypted
    *     media is not required.
@@ -243,10 +243,10 @@ public abstract class MediaCodecTrackRenderer extends SampleSourceTrackRenderer 
    *     null if delivery of events is not required.
    * @param eventListener A listener of events. May be null if delivery of events is not required.
    */
-  public MediaCodecTrackRenderer(SampleSource source, MediaCodecSelector mediaCodecSelector,
+  public MediaCodecTrackRenderer(SampleSource[] sources, MediaCodecSelector mediaCodecSelector,
       DrmSessionManager drmSessionManager, boolean playClearSamplesWithoutKeys,
       Handler eventHandler, EventListener eventListener) {
-    super(source);
+    super(sources);
     Assertions.checkState(Util.SDK_INT >= 16);
     this.mediaCodecSelector = Assertions.checkNotNull(mediaCodecSelector);
     this.drmSessionManager = drmSessionManager;

@@ -67,7 +67,7 @@ public final class MetadataTrackRenderer<T> extends SampleSourceTrackRenderer im
   private T pendingMetadata;
 
   /**
-   * @param source A source from which samples containing metadata can be read.
+   * @param sources Sources from which samples containing metadata can be read.
    * @param metadataParser A parser for parsing the metadata.
    * @param metadataRenderer The metadata renderer to receive the parsed metadata.
    * @param metadataRendererLooper The looper associated with the thread on which metadataRenderer
@@ -76,9 +76,9 @@ public final class MetadataTrackRenderer<T> extends SampleSourceTrackRenderer im
    *     obtained using {@link android.app.Activity#getMainLooper()}. Null may be passed if the
    *     renderer should be invoked directly on the player's internal rendering thread.
    */
-  public MetadataTrackRenderer(SampleSource source, MetadataParser<T> metadataParser,
+  public MetadataTrackRenderer(SampleSource[] sources, MetadataParser<T> metadataParser,
       MetadataRenderer<T> metadataRenderer, Looper metadataRendererLooper) {
-    super(source);
+    super(sources);
     this.metadataParser = Assertions.checkNotNull(metadataParser);
     this.metadataRenderer = Assertions.checkNotNull(metadataRenderer);
     this.metadataHandler = metadataRendererLooper == null ? null

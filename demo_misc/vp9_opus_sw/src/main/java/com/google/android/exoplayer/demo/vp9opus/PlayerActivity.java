@@ -18,6 +18,7 @@ package com.google.android.exoplayer.demo.vp9opus;
 import com.google.android.exoplayer.AspectRatioFrameLayout;
 import com.google.android.exoplayer.ExoPlaybackException;
 import com.google.android.exoplayer.ExoPlayer;
+import com.google.android.exoplayer.SampleSource;
 import com.google.android.exoplayer.TrackRenderer;
 import com.google.android.exoplayer.ext.opus.LibopusAudioTrackRenderer;
 import com.google.android.exoplayer.ext.vp9.LibvpxVideoTrackRenderer;
@@ -139,7 +140,7 @@ public class PlayerActivity extends Activity implements
         new DefaultAllocator(BUFFER_SEGMENT_SIZE), BUFFER_SEGMENT_SIZE * BUFFER_SEGMENT_COUNT,
         new WebmExtractor());
     TrackRenderer videoRenderer =
-        new LibvpxVideoTrackRenderer(sampleSource, true, handler, this, 50);
+        new LibvpxVideoTrackRenderer(new SampleSource[] {sampleSource}, true, handler, this, 50);
     if (useOpenGL) {
       player.sendMessage(videoRenderer, LibvpxVideoTrackRenderer.MSG_SET_OUTPUT_BUFFER_RENDERER,
           vpxVideoSurfaceView);
@@ -150,7 +151,7 @@ public class PlayerActivity extends Activity implements
           surfaceView.getHolder().getSurface());
       vpxVideoSurfaceView.setVisibility(View.GONE);
     }
-    TrackRenderer audioRenderer = new LibopusAudioTrackRenderer(sampleSource);
+    TrackRenderer audioRenderer = new LibopusAudioTrackRenderer(new SampleSource[] {sampleSource});
     player.prepare(videoRenderer, audioRenderer);
     player.setPlayWhenReady(true);
   }

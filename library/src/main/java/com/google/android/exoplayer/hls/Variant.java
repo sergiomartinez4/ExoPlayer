@@ -18,6 +18,9 @@ package com.google.android.exoplayer.hls;
 import com.google.android.exoplayer.chunk.Format;
 import com.google.android.exoplayer.chunk.FormatWrapper;
 
+import java.util.ArrayList;
+import java.util.List;
+
 /**
  * Variant stream reference.
  */
@@ -25,10 +28,33 @@ public final class Variant implements FormatWrapper {
 
   public final String url;
   public final Format format;
+  public final String audioGroup;
+  public final String videoGroup;
+  public final String closedCaptionsGroup;
+  public final String subtitlesGroup;
+  public boolean isDefault;
+
+  public final List<Variant> subtitles = new ArrayList<Variant>();
+  public final List<Variant> closedCaptions = new ArrayList<Variant>();
+  public final List<Variant> alternateAudio = new ArrayList<Variant>();
+  public final List<Variant> alternateVideo = new ArrayList<Variant>();
 
   public Variant(String url, Format format) {
+    this(url, format, false);
+  }
+
+  public Variant(String url, Format format, boolean isDefault) {
+    this(url, format, null, null, null, null);
+    this.isDefault = isDefault;
+  }
+
+  public Variant(String url, Format format, String videoGroup, String audioGroup, String subtitlesGroup, String closedCaptionsGroup) {
     this.url = url;
     this.format = format;
+    this.videoGroup = videoGroup;
+    this.audioGroup = audioGroup;
+    this.closedCaptionsGroup = closedCaptionsGroup;
+    this.subtitlesGroup = subtitlesGroup;
   }
 
   @Override
@@ -36,4 +62,7 @@ public final class Variant implements FormatWrapper {
     return format;
   }
 
+  public boolean isDefault() {
+    return isDefault;
+  }
 }

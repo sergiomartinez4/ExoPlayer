@@ -116,7 +116,7 @@ public class DashRendererBuilder implements ManifestCallback<MediaPresentationDe
           AdaptationSet.TYPE_VIDEO, videoRepresentations);
       ChunkSampleSource videoSampleSource = new ChunkSampleSource(videoChunkSource, loadControl,
           VIDEO_BUFFER_SEGMENTS * BUFFER_SEGMENT_SIZE);
-      videoRenderer = new LibvpxVideoTrackRenderer(videoSampleSource,
+      videoRenderer = new LibvpxVideoTrackRenderer(new SampleSource[] {videoSampleSource},
           true, player.getMainHandler(), player, 50);
     }
 
@@ -132,9 +132,9 @@ public class DashRendererBuilder implements ManifestCallback<MediaPresentationDe
       SampleSource audioSampleSource = new ChunkSampleSource(audioChunkSource, loadControl,
           AUDIO_BUFFER_SEGMENTS * BUFFER_SEGMENT_SIZE);
       if (audioRepresentationIsOpus) {
-        audioRenderer = new LibopusAudioTrackRenderer(audioSampleSource);
+        audioRenderer = new LibopusAudioTrackRenderer(new SampleSource[] {audioSampleSource});
       } else {
-        audioRenderer = new MediaCodecAudioTrackRenderer(audioSampleSource,
+        audioRenderer = new MediaCodecAudioTrackRenderer(new SampleSource[] {audioSampleSource},
             MediaCodecSelector.DEFAULT);
       }
     }

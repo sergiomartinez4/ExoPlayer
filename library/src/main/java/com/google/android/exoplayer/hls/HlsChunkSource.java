@@ -65,9 +65,10 @@ public class HlsChunkSource implements HlsTrackSelector.Output {
     /**
      * Invoked when the available seek range of the stream has changed.
      *
+     * @param sourceId The id of the reporting {@link DashChunkSource}.
      * @param availableRange The range which specifies available content that can be seeked to.
      */
-    public void onAvailableRangeChanged(TimeRange availableRange);
+    public void onAvailableRangeChanged(int sourceId, TimeRange availableRange);
   }
 
   /**
@@ -153,12 +154,18 @@ public class HlsChunkSource implements HlsTrackSelector.Output {
   private long[] variantLastPlaylistLoadTimesMs;
   private long[] variantBlacklistTimes;
 
+  // Whether only video streams in the master variants should be
+  // processed.  When the master playlist has a default alternate
+  // audio stream, audio in the master variants will be ignored.
+  private boolean videoOnly;
+
   // The index in variants of the currently selected variant.
   private int selectedVariantIndex;
 
   private boolean prepareCalled;
   private byte[] scratchSpace;
   private boolean live;
+  private final int eventSourceId;
   private long durationUs;
   private IOException fatalError;
 
@@ -192,7 +199,7 @@ public class HlsChunkSource implements HlsTrackSelector.Output {
       PtsTimestampAdjusterProvider timestampAdjusterProvider, int adaptiveMode) {
     this(isMaster, dataSource, playlistUrl, playlist, trackSelector, bandwidthMeter,
         timestampAdjusterProvider, adaptiveMode, DEFAULT_MIN_BUFFER_TO_SWITCH_UP_MS,
-        DEFAULT_MAX_BUFFER_TO_SWITCH_DOWN_MS);
+        DEFAULT_MAX_BUFFER_TO_SWITCH_DOWN_MS, null, null, 0);
   }
 
   /**
@@ -214,11 +221,16 @@ public class HlsChunkSource implements HlsTrackSelector.Output {
    *     for a switch to a higher quality variant to be considered.
    * @param maxBufferDurationToSwitchDownMs The maximum duration of media that needs to be buffered
    *     for a switch to a lower quality variant to be considered.
+   * @param eventHandler A handler to use when delivering events to {@code EventListener}. May be
+   *     null if delivery of events is not required.
+   * @param eventListener A listener of events. May be null if delivery of events is not required.
+   * @param eventSourceId An identifier that gets passed to {@code eventListener} methods.
    */
   public HlsChunkSource(boolean isMaster, DataSource dataSource, String playlistUrl,
       HlsPlaylist playlist, HlsTrackSelector trackSelector, BandwidthMeter bandwidthMeter,
       PtsTimestampAdjusterProvider timestampAdjusterProvider, int adaptiveMode,
-      long minBufferDurationToSwitchUpMs, long maxBufferDurationToSwitchDownMs) {
+      long minBufferDurationToSwitchUpMs, long maxBufferDurationToSwitchDownMs,
+      Handler eventHandler, EventListener eventListener, int eventSourceId) {
     this.isMaster = isMaster;
     this.dataSource = dataSource;
     this.trackSelector = trackSelector;
@@ -227,6 +239,7 @@ public class HlsChunkSource implements HlsTrackSelector.Output {
     this.adaptiveMode = adaptiveMode;
     this.eventHandler = eventHandler;
     this.eventListener = eventListener;
+    this.eventSourceId = eventSourceId;
     minBufferDurationToSwitchUpUs = minBufferDurationToSwitchUpMs * 1000;
     maxBufferDurationToSwitchDownUs = maxBufferDurationToSwitchDownMs * 1000;
     baseUri = playlist.baseUri;
@@ -240,8 +253,8 @@ public class HlsChunkSource implements HlsTrackSelector.Output {
           null);
       List<Variant> variants = new ArrayList<>();
       variants.add(new Variant(playlistUrl, format));
-      masterPlaylist = new HlsMasterPlaylist(playlistUrl, variants,
-          Collections.<Variant>emptyList());
+      masterPlaylist = new HlsMasterPlaylist(playlistUrl, variants, Collections.<Variant>emptyList(),
+          Collections.<Variant>emptyList(), Collections.<Variant>emptyList(), Collections.<Variant>emptyList());
     }
   }
 
@@ -271,6 +284,7 @@ public class HlsChunkSource implements HlsTrackSelector.Output {
       } catch (IOException e) {
         fatalError = e;
       }
+      videoOnly = masterPlaylist.getDefaultAlternateAudio() != null;
     }
     return fatalError == null;
   }
@@ -518,8 +532,9 @@ public class HlsChunkSource implements HlsTrackSelector.Output {
         // The master source has yet to instantiate an adjuster for the discontinuity sequence.
         return;
       }
+
       ExposedTrack selectedTrack = tracks.get(selectedTrackIndex);
-      Extractor extractor = new TsExtractor(timestampAdjuster);
+      Extractor extractor = new TsExtractor(timestampAdjuster, true, videoOnly);
       extractorWrapper = new HlsExtractorWrapper(trigger, format, startTimeUs, extractor,
           switchingVariantSpliced, selectedTrack.adaptiveMaxWidth, selectedTrack.adaptiveMaxHeight);
     } else {
@@ -811,7 +826,7 @@ public class HlsChunkSource implements HlsTrackSelector.Output {
       eventHandler.post(new Runnable() {
         @Override
         public void run() {
-          eventListener.onAvailableRangeChanged(seekRange);
+          eventListener.onAvailableRangeChanged(eventSourceId, seekRange);
         }
       });
     }

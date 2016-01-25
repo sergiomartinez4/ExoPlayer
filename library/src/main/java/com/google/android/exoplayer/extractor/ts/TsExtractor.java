@@ -61,6 +61,7 @@ public final class TsExtractor implements Extractor {
 
   private final PtsTimestampAdjuster ptsTimestampAdjuster;
   private final boolean idrKeyframesOnly;
+  private final boolean videoOnly;
   private final ParsableByteArray tsPacketBuffer;
   private final ParsableBitArray tsScratch;
   /* package */ final SparseArray<TsPayloadReader> tsPayloadReaders; // Indexed by pid
@@ -79,8 +80,13 @@ public final class TsExtractor implements Extractor {
   }
 
   public TsExtractor(PtsTimestampAdjuster ptsTimestampAdjuster, boolean idrKeyframesOnly) {
+    this(ptsTimestampAdjuster, true, false);
+  }
+
+  public TsExtractor(PtsTimestampAdjuster ptsTimestampAdjuster, boolean idrKeyframesOnly, boolean videoOnly) {
     this.ptsTimestampAdjuster = ptsTimestampAdjuster;
     this.idrKeyframesOnly = idrKeyframesOnly;
+    this.videoOnly = videoOnly;
     tsPacketBuffer = new ParsableByteArray(TS_PACKET_SIZE);
     tsScratch = new ParsableBitArray(new byte[3]);
     tsPayloadReaders = new SparseArray<>();
@@ -328,7 +334,7 @@ public final class TsExtractor implements Extractor {
           continue;
         }
 
-        ElementaryStreamReader pesPayloadReader;
+        ElementaryStreamReader pesPayloadReader = null;
         switch (streamType) {
           case TS_STREAM_TYPE_MPA:
             pesPayloadReader = new MpegAudioReader(output.track(TS_STREAM_TYPE_MPA));
@@ -337,8 +343,10 @@ public final class TsExtractor implements Extractor {
             pesPayloadReader = new MpegAudioReader(output.track(TS_STREAM_TYPE_MPA_LSF));
             break;
           case TS_STREAM_TYPE_AAC:
-            pesPayloadReader = new AdtsReader(output.track(TS_STREAM_TYPE_AAC),
-                new DummyTrackOutput());
+            if (!videoOnly) {
+              pesPayloadReader = new AdtsReader(output.track(TS_STREAM_TYPE_AAC),
+                  new DummyTrackOutput());
+            }
             break;
           case TS_STREAM_TYPE_AC3:
             pesPayloadReader = new Ac3Reader(output.track(TS_STREAM_TYPE_AC3), false);
