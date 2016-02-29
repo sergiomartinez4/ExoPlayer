@@ -79,6 +79,17 @@ public final class LibvpxVideoTrackRenderer extends SampleSourceTrackRenderer {
      */
     void onDecoderError(VpxDecoderException e);
 
+    /**
+     * Invoked when a decoder is successfully created.
+     *
+     * @param decoderName The decoder that was configured and created.
+     * @param elapsedRealtimeMs {@code elapsedRealtime} timestamp of when the initialization
+     *    finished.
+     * @param initializationDurationMs Amount of time taken to initialize the decoder.
+     */
+    void onDecoderInitialized(String decoderName, long elapsedRealtimeMs,
+        long initializationDurationMs);
+
   }
 
   /**
@@ -180,6 +191,7 @@ public final class LibvpxVideoTrackRenderer extends SampleSourceTrackRenderer {
     if (outputStreamEnded) {
       return;
     }
+    this.sourceIsReady = sourceIsReady;
 
     // Try and read a format if we don't have one already.
     if (format == null && !readFormat(positionUs)) {
@@ -189,8 +201,10 @@ public final class LibvpxVideoTrackRenderer extends SampleSourceTrackRenderer {
 
     // If we don't have a decoder yet, we need to instantiate one.
     if (decoder == null) {
+      long startElapsedRealtimeMs = SystemClock.elapsedRealtime();
       decoder = new VpxDecoderWrapper(outputMode);
       decoder.start();
+      notifyDecoderInitialized(startElapsedRealtimeMs, SystemClock.elapsedRealtime());
       codecCounters.codecInitCount++;
     }
 
@@ -485,6 +499,19 @@ public final class LibvpxVideoTrackRenderer extends SampleSourceTrackRenderer {
         @Override
         public void run() {
           eventListener.onDecoderError(e);
+        }
+      });
+    }
+  }
+
+  private void notifyDecoderInitialized(
+      final long startElapsedRealtimeMs, final long finishElapsedRealtimeMs) {
+    if (eventHandler != null && eventListener != null) {
+      eventHandler.post(new Runnable() {
+        @Override
+        public void run() {
+          eventListener.onDecoderInitialized("libvpx" + getLibvpxVersion(),
+              finishElapsedRealtimeMs, finishElapsedRealtimeMs - startElapsedRealtimeMs);
         }
       });
     }

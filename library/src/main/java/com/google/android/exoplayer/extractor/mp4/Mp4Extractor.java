@@ -15,9 +15,11 @@
  */
 package com.google.android.exoplayer.extractor.mp4;
 
+import com.google.android.exoplayer.MediaFormat;
 import com.google.android.exoplayer.extractor.Extractor;
 import com.google.android.exoplayer.extractor.ExtractorInput;
 import com.google.android.exoplayer.extractor.ExtractorOutput;
+import com.google.android.exoplayer.extractor.GaplessInfo;
 import com.google.android.exoplayer.extractor.PositionHolder;
 import com.google.android.exoplayer.extractor.SeekMap;
 import com.google.android.exoplayer.extractor.TrackOutput;
@@ -268,10 +270,17 @@ public final class Mp4Extractor implements Extractor, SeekMap {
     return false;
   }
 
-  /** Updates the stored track metadata to reflect the contents of the specified moov atom. */
+  /**
+   * Updates the stored track metadata to reflect the contents of the specified moov atom.
+   */
   private void processMoovAtom(ContainerAtom moov) {
     List<Mp4Track> tracks = new ArrayList<>();
     long earliestSampleOffset = Long.MAX_VALUE;
+    GaplessInfo gaplessInfo = null;
+    Atom.ContainerAtom udta = moov.getContainerAtomOfType(Atom.TYPE_udta);
+    if (udta != null) {
+      gaplessInfo = AtomParsers.parseUdta(udta);
+    }
     for (int i = 0; i < moov.containerChildren.size(); i++) {
       Atom.ContainerAtom atom = moov.containerChildren.get(i);
       if (atom.type != Atom.TYPE_trak) {
@@ -295,7 +304,12 @@ public final class Mp4Extractor implements Extractor, SeekMap {
       // Each sample has up to three bytes of overhead for the start code that replaces its length.
       // Allow ten source samples per output sample, like the platform extractor.
       int maxInputSize = trackSampleTable.maximumSize + 3 * 10;
-      mp4Track.trackOutput.format(track.mediaFormat.copyWithMaxInputSize(maxInputSize));
+      MediaFormat mediaFormat = track.mediaFormat.copyWithMaxInputSize(maxInputSize);
+      if (gaplessInfo != null) {
+        mediaFormat =
+            mediaFormat.copyWithGaplessInfo(gaplessInfo.encoderDelay, gaplessInfo.encoderPadding);
+      }
+      mp4Track.trackOutput.format(mediaFormat);
       tracks.add(mp4Track);
 
       long firstSampleOffset = trackSampleTable.offsets[0];
@@ -410,19 +424,24 @@ public final class Mp4Extractor implements Extractor, SeekMap {
     return earliestSampleTrackIndex;
   }
 
-  /** Returns whether the extractor should parse a leaf atom with type {@code atom}. */
+  /**
+   * Returns whether the extractor should parse a leaf atom with type {@code atom}.
+   */
   private static boolean shouldParseLeafAtom(int atom) {
     return atom == Atom.TYPE_mdhd || atom == Atom.TYPE_mvhd || atom == Atom.TYPE_hdlr
         || atom == Atom.TYPE_stsd || atom == Atom.TYPE_stts || atom == Atom.TYPE_stss
         || atom == Atom.TYPE_ctts || atom == Atom.TYPE_elst || atom == Atom.TYPE_stsc
         || atom == Atom.TYPE_stsz || atom == Atom.TYPE_stco || atom == Atom.TYPE_co64
-        || atom == Atom.TYPE_tkhd || atom == Atom.TYPE_ftyp;
+        || atom == Atom.TYPE_tkhd || atom == Atom.TYPE_ftyp || atom == Atom.TYPE_meta;
   }
 
-  /** Returns whether the extractor should parse a container atom with type {@code atom}. */
+  /**
+   * Returns whether the extractor should parse a container atom with type {@code atom}.
+   */
   private static boolean shouldParseContainerAtom(int atom) {
     return atom == Atom.TYPE_moov || atom == Atom.TYPE_trak || atom == Atom.TYPE_mdia
-        || atom == Atom.TYPE_minf || atom == Atom.TYPE_stbl || atom == Atom.TYPE_edts;
+        || atom == Atom.TYPE_minf || atom == Atom.TYPE_stbl || atom == Atom.TYPE_edts
+        || atom == Atom.TYPE_udta;
   }
 
   private static final class Mp4Track {

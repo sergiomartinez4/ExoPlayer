@@ -87,7 +87,8 @@ public class MediaCodecVideoTrackRenderer extends MediaCodecTrackRenderer {
 
   }
 
-  // TODO: Use MediaFormat constants if these get exposed through the API. See [Internal: b/14127601].
+  // TODO: Use MediaFormat constants if these get exposed through the API. See
+  // [Internal: b/14127601].
   private static final String KEY_CROP_LEFT = "crop-left";
   private static final String KEY_CROP_RIGHT = "crop-right";
   private static final String KEY_CROP_BOTTOM = "crop-bottom";
@@ -220,7 +221,7 @@ public class MediaCodecVideoTrackRenderer extends MediaCodecTrackRenderer {
       throws DecoderQueryException {
     String mimeType = mediaFormat.mimeType;
     return MimeTypes.isVideo(mimeType) && (MimeTypes.VIDEO_UNKNOWN.equals(mimeType)
-        || mediaCodecSelector.getDecoderInfo(mediaFormat, false) != null);
+        || mediaCodecSelector.getDecoderInfo(mimeType, false) != null);
   }
 
   @Override
@@ -526,6 +527,7 @@ public class MediaCodecVideoTrackRenderer extends MediaCodecTrackRenderer {
         maxPixels = maxWidth * maxHeight;
         minCompressionRatio = 2;
         break;
+      case MimeTypes.VIDEO_H265:
       case MimeTypes.VIDEO_VP9:
         maxPixels = maxWidth * maxHeight;
         minCompressionRatio = 4;

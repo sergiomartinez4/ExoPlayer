@@ -36,6 +36,10 @@ import java.io.IOException;
  */
 public final class TsExtractor implements Extractor {
 
+  public static final int WORKAROUND_ALLOW_NON_IDR_KEYFRAMES = 1;
+  public static final int WORKAROUND_IGNORE_AAC_STREAM = 2;
+  public static final int WORKAROUND_IGNORE_H264_STREAM = 4;
+
   private static final String TAG = "TsExtractor";
 
   private static final int TS_PACKET_SIZE = 188;
@@ -60,8 +64,7 @@ public final class TsExtractor implements Extractor {
   private static final long HEVC_FORMAT_IDENTIFIER = Util.getIntegerCodeForString("HEVC");
 
   private final PtsTimestampAdjuster ptsTimestampAdjuster;
-  private final boolean idrKeyframesOnly;
-  private final boolean videoOnly;
+  private final int workaroundFlags;
   private final ParsableByteArray tsPacketBuffer;
   private final ParsableBitArray tsScratch;
   /* package */ final SparseArray<TsPayloadReader> tsPayloadReaders; // Indexed by pid
@@ -76,17 +79,12 @@ public final class TsExtractor implements Extractor {
   }
 
   public TsExtractor(PtsTimestampAdjuster ptsTimestampAdjuster) {
-    this(ptsTimestampAdjuster, true);
+    this(ptsTimestampAdjuster, 0);
   }
 
-  public TsExtractor(PtsTimestampAdjuster ptsTimestampAdjuster, boolean idrKeyframesOnly) {
-    this(ptsTimestampAdjuster, true, false);
-  }
-
-  public TsExtractor(PtsTimestampAdjuster ptsTimestampAdjuster, boolean idrKeyframesOnly, boolean videoOnly) {
+  public TsExtractor(PtsTimestampAdjuster ptsTimestampAdjuster, int workaroundFlags) {
     this.ptsTimestampAdjuster = ptsTimestampAdjuster;
-    this.idrKeyframesOnly = idrKeyframesOnly;
-    this.videoOnly = videoOnly;
+    this.workaroundFlags = workaroundFlags;
     tsPacketBuffer = new ParsableByteArray(TS_PACKET_SIZE);
     tsScratch = new ParsableBitArray(new byte[3]);
     tsPayloadReaders = new SparseArray<>();
@@ -343,10 +341,8 @@ public final class TsExtractor implements Extractor {
             pesPayloadReader = new MpegAudioReader(output.track(TS_STREAM_TYPE_MPA_LSF));
             break;
           case TS_STREAM_TYPE_AAC:
-            if (!videoOnly) {
-              pesPayloadReader = new AdtsReader(output.track(TS_STREAM_TYPE_AAC),
-                  new DummyTrackOutput());
-            }
+            pesPayloadReader = (workaroundFlags & WORKAROUND_IGNORE_AAC_STREAM) != 0 ? null
+                : new AdtsReader(output.track(TS_STREAM_TYPE_AAC), new DummyTrackOutput());
             break;
           case TS_STREAM_TYPE_AC3:
             pesPayloadReader = new Ac3Reader(output.track(TS_STREAM_TYPE_AC3), false);
@@ -362,8 +358,10 @@ public final class TsExtractor implements Extractor {
             pesPayloadReader = new H262Reader(output.track(TS_STREAM_TYPE_H262));
             break;
           case TS_STREAM_TYPE_H264:
-            pesPayloadReader = new H264Reader(output.track(TS_STREAM_TYPE_H264),
-                new SeiReader(output.track(TS_STREAM_TYPE_EIA608)), idrKeyframesOnly);
+            pesPayloadReader = (workaroundFlags & WORKAROUND_IGNORE_H264_STREAM) != 0 ? null
+                : new H264Reader(output.track(TS_STREAM_TYPE_H264),
+                    new SeiReader(output.track(TS_STREAM_TYPE_EIA608)),
+                    (workaroundFlags & WORKAROUND_ALLOW_NON_IDR_KEYFRAMES) != 0);
             break;
           case TS_STREAM_TYPE_H265:
             pesPayloadReader = new H265Reader(output.track(TS_STREAM_TYPE_H265),
@@ -379,7 +377,8 @@ public final class TsExtractor implements Extractor {
 
         if (pesPayloadReader != null) {
           streamTypes.put(streamType, true);
-          tsPayloadReaders.put(elementaryPid, new PesReader(pesPayloadReader));
+          tsPayloadReaders.put(elementaryPid,
+              new PesReader(pesPayloadReader, ptsTimestampAdjuster));
         }
       }
 
@@ -430,7 +429,7 @@ public final class TsExtractor implements Extractor {
   /**
    * Parses PES packet data and extracts samples.
    */
-  private class PesReader extends TsPayloadReader {
+  private static final class PesReader extends TsPayloadReader {
 
     private static final int STATE_FINDING_HEADER = 0;
     private static final int STATE_READING_HEADER = 1;
@@ -441,22 +440,25 @@ public final class TsExtractor implements Extractor {
     private static final int MAX_HEADER_EXTENSION_SIZE = 10;
     private static final int PES_SCRATCH_SIZE = 10; // max(HEADER_SIZE, MAX_HEADER_EXTENSION_SIZE)
 
-    private final ParsableBitArray pesScratch;
     private final ElementaryStreamReader pesPayloadReader;
+    private final PtsTimestampAdjuster ptsTimestampAdjuster;
+    private final ParsableBitArray pesScratch;
 
     private int state;
     private int bytesRead;
-    private boolean bodyStarted;
 
     private boolean ptsFlag;
     private boolean dtsFlag;
     private boolean seenFirstDts;
     private int extendedHeaderLength;
     private int payloadSize;
+    private boolean dataAlignmentIndicator;
     private long timeUs;
 
-    public PesReader(ElementaryStreamReader pesPayloadReader) {
+    public PesReader(ElementaryStreamReader pesPayloadReader,
+        PtsTimestampAdjuster ptsTimestampAdjuster) {
       this.pesPayloadReader = pesPayloadReader;
+      this.ptsTimestampAdjuster = ptsTimestampAdjuster;
       pesScratch = new ParsableBitArray(new byte[PES_SCRATCH_SIZE]);
       state = STATE_FINDING_HEADER;
     }
@@ -465,7 +467,6 @@ public final class TsExtractor implements Extractor {
     public void seek() {
       state = STATE_FINDING_HEADER;
       bytesRead = 0;
-      bodyStarted = false;
       seenFirstDts = false;
       pesPayloadReader.seek();
     }
@@ -490,10 +491,8 @@ public final class TsExtractor implements Extractor {
             if (payloadSize != -1) {
               Log.w(TAG, "Unexpected start indicator: expected " + payloadSize + " more bytes");
             }
-            // Either way, if the body was started, notify the reader that it has now finished.
-            if (bodyStarted) {
-              pesPayloadReader.packetFinished();
-            }
+            // Either way, notify the reader that it has now finished.
+            pesPayloadReader.packetFinished();
             break;
         }
         setState(STATE_READING_HEADER);
@@ -515,7 +514,7 @@ public final class TsExtractor implements Extractor {
             if (continueRead(data, pesScratch.data, readLength)
                 && continueRead(data, null, extendedHeaderLength)) {
               parseHeaderExtension();
-              bodyStarted = false;
+              pesPayloadReader.packetStarted(timeUs, dataAlignmentIndicator);
               setState(STATE_READING_BODY);
             }
             break;
@@ -526,8 +525,7 @@ public final class TsExtractor implements Extractor {
               readLength -= padding;
               data.setLimit(data.getPosition() + readLength);
             }
-            pesPayloadReader.consume(data, timeUs, !bodyStarted);
-            bodyStarted = true;
+            pesPayloadReader.consume(data);
             if (payloadSize != -1) {
               payloadSize -= readLength;
               if (payloadSize == 0) {
@@ -580,9 +578,9 @@ public final class TsExtractor implements Extractor {
 
       pesScratch.skipBits(8); // stream_id.
       int packetLength = pesScratch.readBits(16);
-      // First 8 bits are skipped: '10' (2), PES_scrambling_control (2), PES_priority (1),
-      // data_alignment_indicator (1), copyright (1), original_or_copy (1)
-      pesScratch.skipBits(8);
+      pesScratch.skipBits(5); // '10' (2), PES_scrambling_control (2), PES_priority (1)
+      dataAlignmentIndicator = pesScratch.readBit();
+      pesScratch.skipBits(2); // copyright (1), original_or_copy (1)
       ptsFlag = pesScratch.readBit();
       dtsFlag = pesScratch.readBit();
       // ESCR_flag (1), ES_rate_flag (1), DSM_trick_mode_flag (1),
