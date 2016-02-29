@@ -39,11 +39,11 @@ public class DebugMediaCodecVideoTrackRenderer extends MediaCodecVideoTrackRende
   private int queueSize;
   private boolean enableBufferTimestampAssertions;
 
-  public DebugMediaCodecVideoTrackRenderer(Context context, SampleSource source,
+  public DebugMediaCodecVideoTrackRenderer(Context context, SampleSource[] sources,
       MediaCodecSelector mediaCodecSelector, int videoScalingMode, long allowedJoiningTimeMs,
       Handler eventHandler, EventListener eventListener, int maxDroppedFrameCountToNotify,
       boolean enableBufferTimestampAssertions) {
-    super(context, source, mediaCodecSelector, videoScalingMode, allowedJoiningTimeMs, null, false,
+    super(context, sources, mediaCodecSelector, videoScalingMode, allowedJoiningTimeMs, null, false,
         eventHandler, eventListener, maxDroppedFrameCountToNotify);
     this.enableBufferTimestampAssertions = enableBufferTimestampAssertions;
     startIndex = 0;
