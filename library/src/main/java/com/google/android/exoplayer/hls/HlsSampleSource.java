@@ -703,6 +703,7 @@ public final class HlsSampleSource implements SampleSource, SampleSourceReader, 
       return;
     }
     if (nextLoadable == null) {
+      loadControl.update(this, downstreamPositionUs, -1, false);
       return;
     }
 
