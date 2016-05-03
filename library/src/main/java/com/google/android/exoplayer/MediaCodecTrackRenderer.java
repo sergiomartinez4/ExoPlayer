@@ -664,6 +664,9 @@ public abstract class MediaCodecTrackRenderer extends SampleSourceTrackRenderer 
       if (sampleHolder.isDecodeOnly()) {
         decodeOnlyPresentationTimestamps.add(presentationTimeUs);
       }
+
+      onQueuedInputBuffer(presentationTimeUs, sampleHolder.data, bufferSize, sampleEncrypted);
+
       if (sampleEncrypted) {
         MediaCodec.CryptoInfo cryptoInfo = getFrameworkCryptoInfo(sampleHolder,
             adaptiveReconfigurationBytes);
@@ -674,7 +677,7 @@ public abstract class MediaCodecTrackRenderer extends SampleSourceTrackRenderer 
       inputIndex = -1;
       codecReceivedBuffers = true;
       codecReconfigurationState = RECONFIGURATION_STATE_NONE;
-      onQueuedInputBuffer(presentationTimeUs);
+      codecCounters.inputBufferCount++;
     } catch (CryptoException e) {
       notifyCryptoError(e);
       throw new ExoPlaybackException(e);
@@ -771,13 +774,17 @@ public abstract class MediaCodecTrackRenderer extends SampleSourceTrackRenderer 
   }
 
   /**
-   * Invoked when an input buffer is queued into the codec.
+   * Invoked immediately before an input buffer is queued into the codec.
    * <p>
    * The default implementation is a no-op.
    *
    * @param presentationTimeUs The timestamp associated with the input buffer.
+   * @param buffer The buffer to be queued.
+   * @param bufferSize the size of the sample data stored in the buffer.
+   * @param sampleEncrypted Whether the sample data is encrypted.
    */
-  protected void onQueuedInputBuffer(long presentationTimeUs) {
+  protected void onQueuedInputBuffer(
+      long presentationTimeUs, ByteBuffer buffer, int bufferSize, boolean sampleEncrypted) {
     // Do nothing.
   }
 
@@ -789,7 +796,7 @@ public abstract class MediaCodecTrackRenderer extends SampleSourceTrackRenderer 
    * @param presentationTimeUs The timestamp associated with the output buffer.
    */
   protected void onProcessedOutputBuffer(long presentationTimeUs) {
-    // Do Nothing.
+    // Do nothing.
   }
 
   /**

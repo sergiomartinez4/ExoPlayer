@@ -36,8 +36,8 @@ public final class Variant implements FormatWrapper {
 
   public final List<Variant> subtitles = new ArrayList<Variant>();
   public final List<Variant> closedCaptions = new ArrayList<Variant>();
-  public final List<Variant> alternateAudio = new ArrayList<Variant>();
-  public final List<Variant> alternateVideo = new ArrayList<Variant>();
+  public final List<Variant> audios = new ArrayList<Variant>();
+  public final List<Variant> videos = new ArrayList<Variant>();
 
   public Variant(String url, Format format) {
     this(url, format, false);

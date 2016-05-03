@@ -25,19 +25,24 @@ public final class HlsMasterPlaylist extends HlsPlaylist {
 
   public final List<Variant> variants;
   public final List<Variant> closedCaptions;
-  public final List<Variant> alternateAudio;
-  public final List<Variant> alternateVideo;
+  public final List<Variant> audios;
+  public final List<Variant> videos;
   public final List<Variant> subtitles;
+  public final String muxedAudioLanguage;
+  public final String muxedCaptionLanguage;
 
   public HlsMasterPlaylist(String baseUri, List<Variant> variants,
       List<Variant> subtitles, List<Variant> closedCaptions,
-      List<Variant> alternateAudio, List<Variant> alternateVideo) {
+      List<Variant> audios, List<Variant> videos,
+      String muxedAudioLanguage, String muxedCaptionLanguage) {
     super(baseUri, HlsPlaylist.TYPE_MASTER);
     this.variants = Collections.unmodifiableList(variants);
     this.subtitles = Collections.unmodifiableList(subtitles);
     this.closedCaptions = Collections.unmodifiableList(closedCaptions);
-    this.alternateAudio = Collections.unmodifiableList(alternateAudio);
-    this.alternateVideo = Collections.unmodifiableList(alternateVideo);
+    this.audios = Collections.unmodifiableList(audios);
+    this.videos = Collections.unmodifiableList(videos);
+    this.muxedAudioLanguage = muxedAudioLanguage;
+    this.muxedCaptionLanguage = muxedCaptionLanguage;
 
     for (Variant variant : variants) {
       for (Variant subtitle : subtitles) {
@@ -54,17 +59,17 @@ public final class HlsMasterPlaylist extends HlsPlaylist {
         }
       }
 
-      for (Variant alternateAudioVariant : alternateAudio) {
-        if (variant.audioGroup != null && alternateAudioVariant.audioGroup != null &&
-            variant.audioGroup.equals(alternateAudioVariant.audioGroup)) {
-          variant.alternateAudio.add(alternateAudioVariant);
+      for (Variant audiosVariant : audios) {
+        if (variant.audioGroup != null && audiosVariant.audioGroup != null &&
+            variant.audioGroup.equals(audiosVariant.audioGroup)) {
+          variant.audios.add(audiosVariant);
         }
       }
 
-      for (Variant alternateVideoVariant : alternateVideo) {
-        if (variant.videoGroup != null && alternateVideoVariant.videoGroup != null &&
-            variant.videoGroup.equals(alternateVideoVariant.videoGroup)) {
-          variant.alternateVideo.add(alternateVideoVariant);
+      for (Variant videosVariant : videos) {
+        if (variant.videoGroup != null && videosVariant.videoGroup != null &&
+            variant.videoGroup.equals(videosVariant.videoGroup)) {
+          variant.videos.add(videosVariant);
         }
       }
     }
@@ -73,7 +78,7 @@ public final class HlsMasterPlaylist extends HlsPlaylist {
   public Variant getDefaultAlternateAudio() {
     Variant result = null;
 
-    for (Variant variant : alternateAudio) {
+    for (Variant variant : audios) {
       if (variant.isDefault()) {
         result = variant;
         break;
