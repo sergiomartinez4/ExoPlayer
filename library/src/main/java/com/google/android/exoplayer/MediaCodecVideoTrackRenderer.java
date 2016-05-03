@@ -128,34 +128,34 @@ public class MediaCodecVideoTrackRenderer extends MediaCodecTrackRenderer {
 
   /**
    * @param context A context.
-   * @param sources The upstream sources from which the renderer obtains samples.
+   * @param source The upstream source from which the renderer obtains samples.
    * @param mediaCodecSelector A decoder selector.
    * @param videoScalingMode The scaling mode to pass to
    *     {@link MediaCodec#setVideoScalingMode(int)}.
    */
-  public MediaCodecVideoTrackRenderer(Context context, SampleSource[] sources,
+  public MediaCodecVideoTrackRenderer(Context context, SampleSource source,
       MediaCodecSelector mediaCodecSelector, int videoScalingMode) {
-    this(context, sources, mediaCodecSelector, videoScalingMode, 0);
+    this(context, source, mediaCodecSelector, videoScalingMode, 0);
   }
 
   /**
    * @param context A context.
-   * @param sources The upstream sources from which the renderer obtains samples.
+   * @param source The upstream source from which the renderer obtains samples.
    * @param mediaCodecSelector A decoder selector.
    * @param videoScalingMode The scaling mode to pass to
    *     {@link MediaCodec#setVideoScalingMode(int)}.
    * @param allowedJoiningTimeMs The maximum duration in milliseconds for which this video renderer
    *     can attempt to seamlessly join an ongoing playback.
    */
-  public MediaCodecVideoTrackRenderer(Context context, SampleSource[] sources,
+  public MediaCodecVideoTrackRenderer(Context context, SampleSource source,
       MediaCodecSelector mediaCodecSelector, int videoScalingMode, long allowedJoiningTimeMs) {
-    this(context, sources, mediaCodecSelector, videoScalingMode, allowedJoiningTimeMs, null, null,
+    this(context, source, mediaCodecSelector, videoScalingMode, allowedJoiningTimeMs, null, null,
         -1);
   }
 
   /**
    * @param context A context.
-   * @param sources The upstream sources from which the renderer obtains samples.
+   * @param source The upstream source from which the renderer obtains samples.
    * @param mediaCodecSelector A decoder selector.
    * @param videoScalingMode The scaling mode to pass to
    *     {@link MediaCodec#setVideoScalingMode(int)}.
@@ -167,16 +167,16 @@ public class MediaCodecVideoTrackRenderer extends MediaCodecTrackRenderer {
    * @param maxDroppedFrameCountToNotify The maximum number of frames that can be dropped between
    *     invocations of {@link EventListener#onDroppedFrames(int, long)}.
    */
-  public MediaCodecVideoTrackRenderer(Context context, SampleSource[] sources,
+  public MediaCodecVideoTrackRenderer(Context context, SampleSource source,
       MediaCodecSelector mediaCodecSelector, int videoScalingMode, long allowedJoiningTimeMs,
       Handler eventHandler, EventListener eventListener, int maxDroppedFrameCountToNotify) {
-    this(context, sources, mediaCodecSelector, videoScalingMode, allowedJoiningTimeMs, null, false,
+    this(context, source, mediaCodecSelector, videoScalingMode, allowedJoiningTimeMs, null, false,
         eventHandler, eventListener, maxDroppedFrameCountToNotify);
   }
 
   /**
    * @param context A context.
-   * @param sources The upstream sources from which the renderer obtains samples.
+   * @param source The upstream source from which the renderer obtains samples.
    * @param mediaCodecSelector A decoder selector.
    * @param videoScalingMode The scaling mode to pass to
    *     {@link MediaCodec#setVideoScalingMode(int)}.
@@ -195,11 +195,11 @@ public class MediaCodecVideoTrackRenderer extends MediaCodecTrackRenderer {
    * @param maxDroppedFrameCountToNotify The maximum number of frames that can be dropped between
    *     invocations of {@link EventListener#onDroppedFrames(int, long)}.
    */
-  public MediaCodecVideoTrackRenderer(Context context, SampleSource[] sources,
+  public MediaCodecVideoTrackRenderer(Context context, SampleSource source,
       MediaCodecSelector mediaCodecSelector, int videoScalingMode, long allowedJoiningTimeMs,
       DrmSessionManager drmSessionManager, boolean playClearSamplesWithoutKeys,
       Handler eventHandler, EventListener eventListener, int maxDroppedFrameCountToNotify) {
-    super(sources, mediaCodecSelector, drmSessionManager, playClearSamplesWithoutKeys, eventHandler,
+    super(source, mediaCodecSelector, drmSessionManager, playClearSamplesWithoutKeys, eventHandler,
         eventListener);
     this.frameReleaseTimeHelper = new VideoFrameReleaseTimeHelper(context);
     this.videoScalingMode = videoScalingMode;

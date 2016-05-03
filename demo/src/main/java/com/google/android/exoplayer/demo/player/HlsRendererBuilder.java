@@ -145,13 +145,13 @@ public class HlsRendererBuilder implements RendererBuilder {
 
       // Build the video/id3 renderers.
       DataSource dataSource = new DefaultUriDataSource(context, bandwidthMeter, userAgent);
-      HlsChunkSource chunkSource = new HlsChunkSource(true /* isMaster */, dataSource, url,
-          manifest, DefaultHlsTrackSelector.newDefaultInstance(context), bandwidthMeter,
+      HlsChunkSource chunkSource = new HlsChunkSource(true /* isMaster */, dataSource, url, manifest,
+          DefaultHlsTrackSelector.newDefaultInstance(context), bandwidthMeter,
           timestampAdjusterProvider, HlsChunkSource.ADAPTIVE_MODE_SPLICE);
       HlsSampleSource sampleSource = new HlsSampleSource(chunkSource, loadControl,
           MAIN_BUFFER_SEGMENTS * BUFFER_SEGMENT_SIZE, mainHandler, player, DemoPlayer.TYPE_VIDEO);
       MediaCodecVideoTrackRenderer videoRenderer = new MediaCodecVideoTrackRenderer(context,
-          new SampleSource[] {sampleSource}, MediaCodecSelector.DEFAULT, MediaCodec.VIDEO_SCALING_MODE_SCALE_TO_FIT,
+          sampleSource, MediaCodecSelector.DEFAULT, MediaCodec.VIDEO_SCALING_MODE_SCALE_TO_FIT,
           5000, mainHandler, player, 50);
       MetadataTrackRenderer<List<Id3Frame>> id3Renderer = new MetadataTrackRenderer<>(
           sampleSource, new Id3Parser(), player, mainHandler.getLooper());
@@ -187,7 +187,7 @@ public class HlsRendererBuilder implements RendererBuilder {
             TEXT_BUFFER_SEGMENTS * BUFFER_SEGMENT_SIZE, mainHandler, player, DemoPlayer.TYPE_TEXT);
         textRenderer = new TextTrackRenderer(textSampleSource, player, mainHandler.getLooper());
       } else {
-        textRenderer = new Eia608TrackRenderer(new SampleSource[] {sampleSource}, player, mainHandler.getLooper());
+        textRenderer = new Eia608TrackRenderer(sampleSource, player, mainHandler.getLooper());
       }
 
       TrackRenderer[] renderers = new TrackRenderer[DemoPlayer.RENDERER_COUNT];

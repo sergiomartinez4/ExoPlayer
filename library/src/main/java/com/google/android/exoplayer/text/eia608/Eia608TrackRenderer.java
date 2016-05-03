@@ -69,7 +69,7 @@ public final class Eia608TrackRenderer extends SampleSourceTrackRenderer impleme
   private ClosedCaptionCtrl repeatableControl;
 
   /**
-   * @param sources Sources from which samples containing EIA-608 closed captions can be read.
+   * @param source A source from which samples containing EIA-608 closed captions can be read.
    * @param textRenderer The text renderer.
    * @param textRendererLooper The looper associated with the thread on which textRenderer should be
    *     invoked. If the renderer makes use of standard Android UI components, then this should
@@ -77,9 +77,9 @@ public final class Eia608TrackRenderer extends SampleSourceTrackRenderer impleme
    *     obtained using {@link android.app.Activity#getMainLooper()}. Null may be passed if the
    *     renderer should be invoked directly on the player's internal rendering thread.
    */
-  public Eia608TrackRenderer(SampleSource[] sources, TextRenderer textRenderer,
+  public Eia608TrackRenderer(SampleSource source, TextRenderer textRenderer,
       Looper textRendererLooper) {
-    super(sources);
+    super(source);
     this.textRenderer = Assertions.checkNotNull(textRenderer);
     textRendererHandler = textRendererLooper == null ? null : new Handler(textRendererLooper, this);
     eia608Parser = new Eia608Parser();

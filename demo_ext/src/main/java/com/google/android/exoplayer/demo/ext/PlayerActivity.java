@@ -143,7 +143,7 @@ public class PlayerActivity extends Activity implements
         new DefaultAllocator(BUFFER_SEGMENT_SIZE), BUFFER_SEGMENT_SIZE * BUFFER_SEGMENT_COUNT,
         new WebmExtractor(), new FlacExtractor());
     TrackRenderer videoRenderer =
-        new LibvpxVideoTrackRenderer(new SampleSource[] {sampleSource}, true, handler, this, 50);
+        new LibvpxVideoTrackRenderer(sampleSource, true, handler, this, 50);
     if (useOpenGL) {
       player.sendMessage(videoRenderer, LibvpxVideoTrackRenderer.MSG_SET_OUTPUT_BUFFER_RENDERER,
           vpxVideoSurfaceView);

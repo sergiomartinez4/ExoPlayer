@@ -40,7 +40,7 @@ public abstract class SampleSourceTrackRenderer extends TrackRenderer {
   /**
    * @param sources One or more upstream sources from which the renderer can obtain samples.
    */
-  public SampleSourceTrackRenderer(SampleSource[] sources) {
+  public SampleSourceTrackRenderer(SampleSource... sources) {
     this.sources = new SampleSourceReader[sources.length];
     for (int i = 0; i < sources.length; i++) {
       this.sources[i] = sources[i].register();

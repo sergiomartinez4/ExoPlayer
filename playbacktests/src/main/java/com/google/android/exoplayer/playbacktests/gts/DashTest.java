@@ -455,7 +455,7 @@ public final class DashTest extends ActivityInstrumentationTestCase2<HostActivit
           AUDIO_BUFFER_SEGMENTS * BUFFER_SEGMENT_SIZE, handler, logger, AUDIO_EVENT_ID,
           MIN_LOADABLE_RETRY_COUNT);
       MediaCodecAudioTrackRenderer audioRenderer = new MediaCodecAudioTrackRenderer(
-          new SampleSource[] {audioSampleSource}, MediaCodecSelector.DEFAULT, handler, logger);
+          audioSampleSource, MediaCodecSelector.DEFAULT, handler, logger);
       audioCounters = audioRenderer.codecCounters;
 
       TrackRenderer[] renderers = new TrackRenderer[RENDERER_COUNT];

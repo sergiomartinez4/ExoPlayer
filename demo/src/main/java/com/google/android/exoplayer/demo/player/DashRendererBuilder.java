@@ -20,7 +20,6 @@ import com.google.android.exoplayer.LoadControl;
 import com.google.android.exoplayer.MediaCodecAudioTrackRenderer;
 import com.google.android.exoplayer.MediaCodecSelector;
 import com.google.android.exoplayer.MediaCodecVideoTrackRenderer;
-import com.google.android.exoplayer.SampleSource;
 import com.google.android.exoplayer.TrackRenderer;
 import com.google.android.exoplayer.audio.AudioCapabilities;
 import com.google.android.exoplayer.chunk.ChunkSampleSource;
@@ -222,7 +221,7 @@ public class DashRendererBuilder implements RendererBuilder {
       ChunkSampleSource videoSampleSource = new ChunkSampleSource(videoChunkSource, loadControl,
           VIDEO_BUFFER_SEGMENTS * BUFFER_SEGMENT_SIZE, mainHandler, player,
           DemoPlayer.TYPE_VIDEO);
-      TrackRenderer videoRenderer = new MediaCodecVideoTrackRenderer(context, new SampleSource[] {videoSampleSource},
+      TrackRenderer videoRenderer = new MediaCodecVideoTrackRenderer(context, videoSampleSource,
           MediaCodecSelector.DEFAULT, MediaCodec.VIDEO_SCALING_MODE_SCALE_TO_FIT, 5000,
           drmSessionManager, true, mainHandler, player, 50);
 
@@ -234,7 +233,7 @@ public class DashRendererBuilder implements RendererBuilder {
       ChunkSampleSource audioSampleSource = new ChunkSampleSource(audioChunkSource, loadControl,
           AUDIO_BUFFER_SEGMENTS * BUFFER_SEGMENT_SIZE, mainHandler, player,
           DemoPlayer.TYPE_AUDIO);
-      TrackRenderer audioRenderer = new MediaCodecAudioTrackRenderer(new SampleSource[] {audioSampleSource},
+      TrackRenderer audioRenderer = new MediaCodecAudioTrackRenderer(audioSampleSource,
           MediaCodecSelector.DEFAULT, drmSessionManager, true, mainHandler, player,
           AudioCapabilities.getCapabilities(context), AudioManager.STREAM_MUSIC);
 
