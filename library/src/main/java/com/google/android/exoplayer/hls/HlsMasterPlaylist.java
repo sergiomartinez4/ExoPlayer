@@ -46,29 +46,29 @@ public final class HlsMasterPlaylist extends HlsPlaylist {
 
     for (Variant variant : variants) {
       for (Variant subtitle : subtitles) {
-        if (variant.subtitlesGroup != null && subtitle.subtitlesGroup != null &&
-            variant.subtitlesGroup.equals(subtitle.subtitlesGroup)) {
+        if (variant.subtitlesGroup != null && subtitle.groupID != null &&
+            variant.subtitlesGroup.equals(subtitle.groupID)) {
           variant.subtitles.add(subtitle);
         }
       }
 
       for (Variant closedCaption : closedCaptions) {
-        if (variant.closedCaptionsGroup != null && closedCaption.closedCaptionsGroup != null &&
-            variant.closedCaptionsGroup.equals(closedCaption.closedCaptionsGroup)) {
-          variant.closedCaptions.add(closedCaption);
+        if (variant.closedCaptionsGroup != null && closedCaption.groupID != null &&
+            variant.closedCaptionsGroup.equals(closedCaption.groupID)) {
+	    variant.closedCaptions.add(closedCaption);
         }
       }
 
       for (Variant audiosVariant : audios) {
-        if (variant.audioGroup != null && audiosVariant.audioGroup != null &&
-            variant.audioGroup.equals(audiosVariant.audioGroup)) {
+        if (variant.audioGroup != null && audiosVariant.groupID != null &&
+            variant.audioGroup.equals(audiosVariant.groupID)) {
           variant.audios.add(audiosVariant);
         }
       }
 
       for (Variant videosVariant : videos) {
-        if (variant.videoGroup != null && videosVariant.videoGroup != null &&
-            variant.videoGroup.equals(videosVariant.videoGroup)) {
+        if (variant.videoGroup != null && videosVariant.groupID != null &&
+            variant.videoGroup.equals(videosVariant.groupID)) {
           variant.videos.add(videosVariant);
         }
       }

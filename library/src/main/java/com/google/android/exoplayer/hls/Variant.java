@@ -33,6 +33,7 @@ public final class Variant implements FormatWrapper {
   public final String closedCaptionsGroup;
   public final String subtitlesGroup;
   public boolean isDefault;
+  public String groupID;
 
   public final List<Variant> subtitles = new ArrayList<Variant>();
   public final List<Variant> closedCaptions = new ArrayList<Variant>();
@@ -40,12 +41,13 @@ public final class Variant implements FormatWrapper {
   public final List<Variant> videos = new ArrayList<Variant>();
 
   public Variant(String url, Format format) {
-    this(url, format, false);
+      this(url, format, null, false);
   }
 
-  public Variant(String url, Format format, boolean isDefault) {
+  public Variant(String url, Format format, String groupID, boolean isDefault) {
     this(url, format, null, null, null, null);
     this.isDefault = isDefault;
+    this.groupID = groupID;
   }
 
   public Variant(String url, Format format, String videoGroup, String audioGroup, String subtitlesGroup, String closedCaptionsGroup) {

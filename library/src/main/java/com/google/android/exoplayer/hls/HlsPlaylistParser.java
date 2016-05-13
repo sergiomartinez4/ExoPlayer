@@ -197,11 +197,12 @@ public final class HlsPlaylistParser implements UriLoadable.Parser<HlsPlaylist> 
 
           Format format = new Format(name, uri, MimeTypes.APPLICATION_M3U8, -1, -1, -1, -1, -1, -1,
               language, codecs);
-          audios.add(new Variant(uri, format, isDefault));
+
+          audios.add(new Variant(uri, format, groupID, isDefault));
         } else if (SUBTITLES_TYPE.equals(type)) {
           Format format = new Format(name, uri, MimeTypes.APPLICATION_M3U8, -1, -1, -1, -1, -1, -1,
               language, codecs);
-          subtitles.add(new Variant(uri, format, isDefault));
+          subtitles.add(new Variant(uri, format, groupID, isDefault));
         } else if (CLOSED_CAPTIONS_TYPE.equals(type)) {
           String instreamId = HlsParserUtil.parseStringAttr(line, INSTREAM_ID_ATTR_REGEX,
               INSTREAM_ID_ATTR);
@@ -211,11 +212,11 @@ public final class HlsPlaylistParser implements UriLoadable.Parser<HlsPlaylist> 
 
           Format format = new Format(name, uri, getTextMimeType(uri), -1, -1, -1, -1, -1, -1,
               language, codecs);
-          closedCaptions.add(new Variant(uri, format, isDefault));
+          closedCaptions.add(new Variant(uri, format, groupID, isDefault));
         } else if (VIDEO_TYPE.equals(type)) {
           Format format = new Format(name, uri, MimeTypes.APPLICATION_M3U8, -1, -1, -1, -1, -1, -1,
               language, codecs);
-          videos.add(new Variant(uri, format, isDefault));
+          videos.add(new Variant(uri, format, groupID, isDefault));
         } else {
             // Unrecognized type.
         }
