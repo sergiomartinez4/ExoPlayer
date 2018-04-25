@@ -28,10 +28,8 @@ import java.util.concurrent.TimeUnit;
 
 public class MainActivity extends AppCompatActivity {
 
-    private static final String VIDEO_URL = "http://10.1.49.225:9090/test/dash/odrm/bcove_jeff.mpd";
-//    private static final String VIDEO_URL = "http://10.1.12.131:9090/test/dash/odrm/bcove_jeff.mpd";
-//    private static final String VIDEO_URL = ""http://manifest.prod.boltdns.net/manifest/v1/dash/live-baseurl/bccenc/5420904993001/669faeb9-d71d-438f-9427-267f2791fd97/2s/manifest.mpd?fastly_token=NWIwMzBjY2ZfODMyOGY0MGYwNjI3ZGM1YzJkMTk0YTM5OGMyYWRlNTBjYTQyY2ZhZjRhNDMxZjVmOGJmOGNmZTM0YmZlNDRhYQ%3D%3D"";
-    private static final String LICENSE_URL = "https://manifest.prod.boltdns.net/license/v1/cenc/widevine/5420904993001/669faeb9-d71d-438f-9427-267f2791fd97/18414a8c-91c7-40fc-a8e8-7653a6793db7?fastly_token=NWIwMzBjY2ZfMmFiYmRlNDAxMDA3ZjEwMzVhNGY5NTUzMDg0ZDUxYTkwOGQ1N2I1Yjg4YjQ4NmRjN2EwYTM0Yzc5MjI5Zjc4OQ%3D%3D";
+    private static final String VIDEO_URL = "http://solutions.brightcove.com/jwhisenant/dash/40961/manifest.mpd";
+    private static final String LICENSE_URL = "https://manifest.prod.boltdns.net/license/v1/cenc/widevine/5420904993001/669faeb9-d71d-438f-9427-267f2791fd97/18414a8c-91c7-40fc-a8e8-7653a6793db7?fastly_token=NWIwNTdlMmJfYmMyNmNlYmE1MDNmNDNlNWEyZjFjODI2YWU2NzQ3NjcxNzZiMmYzNjcyNWU2NGU2NzE5ZTMxZTg1YTEwMmZkNg%3D%3D";
     private static final String customerRightsTokenJsonString = "{\"profile\":{\"rental\":{\"absoluteExpiration\":\"2018-04-25T04:00:00.619Z\",\"playDuration\":124300}},\"storeLicense\":true}";
     @Override
     protected void onCreate(Bundle savedInstanceState) {
