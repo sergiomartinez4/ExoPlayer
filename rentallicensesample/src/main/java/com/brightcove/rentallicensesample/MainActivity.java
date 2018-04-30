@@ -30,7 +30,7 @@ public class MainActivity extends AppCompatActivity {
 
     private static final String VIDEO_URL = "http://solutions.brightcove.com/jwhisenant/dash/40961/manifest.mpd";
     private static final String LICENSE_URL = "https://manifest.prod.boltdns.net/license/v1/cenc/widevine/5420904993001/669faeb9-d71d-438f-9427-267f2791fd97/18414a8c-91c7-40fc-a8e8-7653a6793db7?fastly_token=NWIwNTdlMmJfYmMyNmNlYmE1MDNmNDNlNWEyZjFjODI2YWU2NzQ3NjcxNzZiMmYzNjcyNWU2NGU2NzE5ZTMxZTg1YTEwMmZkNg%3D%3D";
-    private static final String customerRightsTokenJsonString = "{\"profile\":{\"rental\":{\"absoluteExpiration\":\"2018-04-25T04:00:00.619Z\",\"playDuration\":124300}},\"storeLicense\":true}";
+    private static final String customerRightsTokenJsonString = "{\"profile\":{\"rental\":{\"absoluteExpiration\":\"2018-05-25T04:00:00.619Z\",\"playDuration\":124300}},\"storeLicense\":true}";
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -53,32 +53,13 @@ public class MainActivity extends AppCompatActivity {
                                     expirationDate.setText("Expiration: "+date);
                                 }
                             });
-                        } catch (IOException e) {
-                            e.printStackTrace();
-                        } catch (InterruptedException e) {
-                            e.printStackTrace();
-                        } catch (UnsupportedDrmException e) {
-                            e.printStackTrace();
-                        } catch (DrmSession.DrmSessionException e) {
+                        } catch (IOException | InterruptedException | UnsupportedDrmException | DrmSession.DrmSessionException e) {
                             e.printStackTrace();
                         }
                     }
                 }).start();
             }
         });
-    }
-
-    private OfflineLicenseHelper createLicenseHelperExo() {
-        //Create LicenseManager
-        try {
-            //FrameworkMediaDrm.newInstance(C.WIDEVINE_UUID);
-            OfflineLicenseHelper offlineLicenseHelper = OfflineLicenseHelper.newWidevineInstance(LICENSE_URL, true, new DefaultHttpDataSourceFactory("ExoPlayer"));
-
-
-        } catch (UnsupportedDrmException e) {
-            e.printStackTrace();
-        }
-        return null;
     }
 
     private OfflineLicenseHelper createLicenseHelperBC(WidevineMediaDrmCallback widevineMediaDrmCallback) throws UnsupportedDrmException {
@@ -121,7 +102,6 @@ public class MainActivity extends AppCompatActivity {
             expiryDate = new Date(System.currentTimeMillis() + TimeUnit.SECONDS.toMillis(duration.first));
 
         }
-        //return licenseKeySetId;
         return expiryDate;
     }
 }
